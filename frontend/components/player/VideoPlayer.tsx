@@ -9,6 +9,8 @@ import KeyboardShortcutsHelp from "./KeyboardShortcutsHelp"
 import { usePlaybackCoordinator } from "@/hooks/usePlaybackCoordinator"
 import { useAutoHideControls } from "@/hooks/useAutoHideControls"
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts"
+import { useProgressTracking } from "@/hooks/useProgressTracking"
+import { ResumePrompt } from "./ResumePrompt"
 
 interface VideoPlayerProps {
   id?: string
@@ -148,6 +150,22 @@ export default function VideoPlayer({
     },
     [duration, isEnded, setCurrentTime, setIsEnded]
   )
+
+  // Smart watch history & resume playback tracking (Phase 4)
+  const {
+    showResumePrompt,
+    resumeData,
+    dismissResumePrompt,
+    handleResume,
+    handleStartOver,
+  } = useProgressTracking({
+    videoId: id,
+    videoRef,
+    isPlaying,
+    currentTime,
+    duration,
+    onSeek: handleSeek,
+  })
 
   const handleSeekRelative = useCallback(
     (seconds: number) => {
@@ -615,6 +633,17 @@ export default function VideoPlayer({
               Retry Stream
             </button>
           </div>
+        )}
+
+        {/* Smart Resume Playback Prompt (Phase 4) */}
+        {showResumePrompt && resumeData && (
+          <ResumePrompt
+            lastPositionSeconds={resumeData.lastPositionSeconds}
+            durationSeconds={resumeData.durationSeconds}
+            onDismiss={dismissResumePrompt}
+            onResume={handleResume}
+            onStartOver={handleStartOver}
+          />
         )}
 
         {/* Upgraded Custom Player Controls Bar */}

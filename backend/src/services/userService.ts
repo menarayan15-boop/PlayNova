@@ -74,6 +74,9 @@ export class UserService {
       autoplay: false,
       preferredTheme: "cream",
       defaultVolume: 0.8,
+      historyTrackingEnabled: true,
+      resumePreference: "ask",
+      completionThreshold: 90,
     }
 
     if (isDatabaseConnected()) {
@@ -467,6 +470,15 @@ export class UserService {
       if (typeof prefUpdates.defaultVolume === "number") {
         user.preferences.defaultVolume = Math.max(0, Math.min(1, prefUpdates.defaultVolume))
       }
+      if (typeof prefUpdates.historyTrackingEnabled === "boolean") {
+        user.preferences.historyTrackingEnabled = prefUpdates.historyTrackingEnabled
+      }
+      if (prefUpdates.resumePreference && ["ask", "auto", "start_over"].includes(prefUpdates.resumePreference)) {
+        user.preferences.resumePreference = prefUpdates.resumePreference
+      }
+      if (typeof prefUpdates.completionThreshold === "number") {
+        user.preferences.completionThreshold = Math.max(50, Math.min(100, prefUpdates.completionThreshold))
+      }
 
       await user.save()
       return user.preferences
@@ -488,6 +500,15 @@ export class UserService {
       }
       if (typeof prefUpdates.defaultVolume === "number") {
         u.preferences.defaultVolume = Math.max(0, Math.min(1, prefUpdates.defaultVolume))
+      }
+      if (typeof prefUpdates.historyTrackingEnabled === "boolean") {
+        u.preferences.historyTrackingEnabled = prefUpdates.historyTrackingEnabled
+      }
+      if (prefUpdates.resumePreference && ["ask", "auto", "start_over"].includes(prefUpdates.resumePreference)) {
+        u.preferences.resumePreference = prefUpdates.resumePreference
+      }
+      if (typeof prefUpdates.completionThreshold === "number") {
+        u.preferences.completionThreshold = Math.max(50, Math.min(100, prefUpdates.completionThreshold))
       }
       u.updatedAt = new Date()
 

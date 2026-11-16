@@ -5,6 +5,8 @@ import healthRoutes from "./routes/healthRoutes.js"
 import videoRoutes from "./routes/videoRoutes.js"
 import authRoutes from "./routes/authRoutes.js"
 import userRoutes from "./routes/userRoutes.js"
+import progressRoutes from "./routes/progressRoutes.js"
+import historyRoutes from "./routes/historyRoutes.js"
 import { errorHandler } from "./middleware/errorHandler.js"
 import { config } from "./config/env.js"
 
@@ -43,10 +45,15 @@ export function createApp(): Express {
   // Versioned v1 Routes
   app.use("/api/v1/auth", authRoutes)
   app.use("/api/v1/users", userRoutes)
+  app.use("/api/v1/progress", progressRoutes)
+  app.use("/api/v1/history", historyRoutes)
+  app.use("/api/v1", videoRoutes)
 
   // Backward-compatible unversioned route aliases
   app.use("/api/auth", authRoutes)
   app.use("/api/users", userRoutes)
+  app.use("/api/progress", progressRoutes)
+  app.use("/api/history", historyRoutes)
   app.use("/api", healthRoutes)
   app.use("/api", videoRoutes)
 

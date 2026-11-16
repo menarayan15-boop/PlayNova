@@ -6,6 +6,9 @@ export interface IUserPreferences {
   autoplay: boolean
   preferredTheme: string
   defaultVolume: number
+  historyTrackingEnabled: boolean
+  resumePreference: "ask" | "auto" | "start_over"
+  completionThreshold: number
 }
 
 export interface IRefreshToken {
@@ -47,6 +50,9 @@ const PreferencesSchema = new Schema<IUserPreferences>(
     autoplay: { type: Boolean, default: false },
     preferredTheme: { type: String, default: "cream" },
     defaultVolume: { type: Number, default: 0.8, min: 0, max: 1 },
+    historyTrackingEnabled: { type: Boolean, default: true },
+    resumePreference: { type: String, enum: ["ask", "auto", "start_over"], default: "ask" },
+    completionThreshold: { type: Number, default: 90, min: 50, max: 100 },
   },
   { _id: false }
 )
@@ -102,6 +108,9 @@ const UserSchema = new Schema<IUser>(
         autoplay: false,
         preferredTheme: "cream",
         defaultVolume: 0.8,
+        historyTrackingEnabled: true,
+        resumePreference: "ask",
+        completionThreshold: 90,
       }),
     },
     refreshTokens: {

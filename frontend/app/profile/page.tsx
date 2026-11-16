@@ -159,6 +159,12 @@ export default function ProfilePage() {
 
             <div className="flex flex-col gap-2 w-full sm:w-auto">
               <Link
+                href="/history"
+                className="px-4 py-2 rounded-full text-xs font-semibold bg-[#8c7b33] hover:bg-[#a6923d] text-white text-center transition-all shadow-sm"
+              >
+                Watch History
+              </Link>
+              <Link
                 href="/settings"
                 className="px-4 py-2 rounded-full text-xs font-semibold bg-white/10 hover:bg-white/20 border border-white/10 text-white text-center transition-all"
               >
