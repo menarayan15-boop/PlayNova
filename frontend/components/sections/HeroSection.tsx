@@ -5,8 +5,19 @@ import Link from "next/link"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 import VideoPlayer from "../player/VideoPlayer"
+import VideoPlayerErrorBoundary from "../player/VideoPlayerErrorBoundary"
 import { ContinueWatchingCard, SmartPlaybackCard } from "../ui/FloatingCard"
 import { useReducedMotion } from "@/hooks/useReducedMotion"
+import { ThumbnailPreview } from "@/types"
+
+const HERO_THUMBNAILS: ThumbnailPreview[] = [
+  { time: 0, imageUrl: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=300&q=70" },
+  { time: 60, imageUrl: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=300&q=70" },
+  { time: 180, imageUrl: "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=300&q=70" },
+  { time: 300, imageUrl: "https://images.unsplash.com/photo-1447433589675-4aaa569f3e05?auto=format&fit=crop&w=300&q=70" },
+  { time: 480, imageUrl: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=300&q=70" },
+  { time: 600, imageUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=300&q=70" },
+]
 
 export default function HeroSection() {
   const heroRef = useRef<HTMLElement>(null)
@@ -217,22 +228,17 @@ export default function HeroSection() {
             className="rounded-2xl p-2.5 sm:p-3.5 bg-gradient-to-br from-[#1b1f22] to-[#0b0d0e] border border-white/10 shadow-[0_50px_100px_-40px_rgba(16,41,45,0.55),0_20px_40px_-30px_rgba(16,41,45,0.4)] transition-transform [transform-style:preserve-3d]"
           >
             {/* The real functional HTML5 Video Player */}
-            <VideoPlayer
-              id="hero-player"
-              src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
-              title="Cosmic Horizons: The Deep Space Explorer"
-              poster="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80"
-              autoPlay={false}
-              thumbnails={[
-                { time: 0, imageUrl: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=300&q=70" },
-                { time: 60, imageUrl: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=300&q=70" },
-                { time: 180, imageUrl: "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=300&q=70" },
-                { time: 300, imageUrl: "https://images.unsplash.com/photo-1447433589675-4aaa569f3e05?auto=format&fit=crop&w=300&q=70" },
-                { time: 480, imageUrl: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=300&q=70" },
-                { time: 600, imageUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=300&q=70" },
-              ]}
-              className="rounded-xl"
-            />
+            <VideoPlayerErrorBoundary fallbackTitle="Cosmic Horizons: The Deep Space Explorer">
+              <VideoPlayer
+                id="hero-player"
+                src="/sample-videos/cosmic-horizons.mp4"
+                title="Cosmic Horizons: The Deep Space Explorer"
+                poster="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80"
+                autoPlay={false}
+                thumbnails={HERO_THUMBNAILS}
+                className="rounded-xl"
+              />
+            </VideoPlayerErrorBoundary>
           </div>
 
           {/* Floating animated Cards inspired by template */}

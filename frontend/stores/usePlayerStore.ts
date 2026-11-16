@@ -165,8 +165,31 @@ export const usePlayerStore = create<PlayerState & PlayerActions>((set, get) => 
     set({ playbackSpeed: SPEED_OPTIONS[nextIndex] })
   },
 
-  setActiveSubtitleTrack: (activeSubtitleTrack) => set({ activeSubtitleTrack }),
-  setAvailableSubtitles: (availableSubtitles) => set({ availableSubtitles }),
+  setActiveSubtitleTrack: (activeSubtitleTrack) => {
+    if (get().activeSubtitleTrack === activeSubtitleTrack) return
+    set({ activeSubtitleTrack })
+  },
+
+  setAvailableSubtitles: (newTracks) => {
+    const current = get().availableSubtitles
+    // Check if the tracks array is structurally unchanged to avoid infinite state loops
+    if (current && newTracks && current.length === newTracks.length) {
+      const isIdentical = current.every((track, i) => {
+        const next = newTracks[i]
+        return (
+          track.id === next.id &&
+          track.language === next.language &&
+          track.label === next.label &&
+          track.src === next.src &&
+          track.default === next.default
+        )
+      })
+      if (isIdentical) {
+        return // Bail out: identical subtitles already in store
+      }
+    }
+    set({ availableSubtitles: newTracks })
+  },
 
   toggleSubtitles: () => {
     const { activeSubtitleTrack, availableSubtitles } = get()

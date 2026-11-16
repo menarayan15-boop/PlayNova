@@ -3,6 +3,7 @@
 import React from "react"
 import Link from "next/link"
 import VideoPlayer from "./VideoPlayer"
+import VideoPlayerErrorBoundary from "./VideoPlayerErrorBoundary"
 import { VideoItem } from "@/types"
 import { usePlayerStore } from "@/stores/usePlayerStore"
 
@@ -30,16 +31,18 @@ export default function WatchPageClient({
       {isTheaterMode ? (
         <div className="w-full bg-[#071316] py-4 mb-8 border-b border-white/10 shadow-inner">
           <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
-            <VideoPlayer
-              id="watch-player"
-              src={activeVideo.videoUrl}
-              title={activeVideo.title}
-              poster={activeVideo.thumbnailUrl}
-              subtitles={activeVideo.subtitles}
-              thumbnails={activeVideo.previewThumbnails}
-              onNextVideo={handleNextVideo}
-              autoPlay={false}
-            />
+            <VideoPlayerErrorBoundary fallbackTitle={activeVideo.title}>
+              <VideoPlayer
+                id="watch-player"
+                src={activeVideo.videoUrl}
+                title={activeVideo.title}
+                poster={activeVideo.thumbnailUrl}
+                subtitles={activeVideo.subtitles}
+                thumbnails={activeVideo.previewThumbnails}
+                onNextVideo={handleNextVideo}
+                autoPlay={false}
+              />
+            </VideoPlayerErrorBoundary>
           </div>
         </div>
       ) : null}
@@ -66,16 +69,18 @@ export default function WatchPageClient({
             {/* If NOT theater mode, player renders here in standard 2/3 column */}
             {!isTheaterMode && (
               <div className="rounded-2xl overflow-hidden bg-black shadow-2xl border border-[#e2e0d6]/60">
-                <VideoPlayer
-                  id="watch-player"
-                  src={activeVideo.videoUrl}
-                  title={activeVideo.title}
-                  poster={activeVideo.thumbnailUrl}
-                  subtitles={activeVideo.subtitles}
-                  thumbnails={activeVideo.previewThumbnails}
-                  onNextVideo={handleNextVideo}
-                  autoPlay={false}
-                />
+                <VideoPlayerErrorBoundary fallbackTitle={activeVideo.title}>
+                  <VideoPlayer
+                    id="watch-player"
+                    src={activeVideo.videoUrl}
+                    title={activeVideo.title}
+                    poster={activeVideo.thumbnailUrl}
+                    subtitles={activeVideo.subtitles}
+                    thumbnails={activeVideo.previewThumbnails}
+                    onNextVideo={handleNextVideo}
+                    autoPlay={false}
+                  />
+                </VideoPlayerErrorBoundary>
               </div>
             )}
 
@@ -163,3 +168,4 @@ export default function WatchPageClient({
     </div>
   )
 }
+

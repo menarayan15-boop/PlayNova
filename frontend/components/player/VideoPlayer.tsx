@@ -24,16 +24,18 @@ interface VideoPlayerProps {
   onNextVideo?: () => void
 }
 
+const DEFAULT_SUBTITLES: SubtitleTrack[] = [
+  { id: "sub-en", label: "English", language: "en", src: "/captions/english.vtt", default: true },
+  { id: "sub-es", label: "Español", language: "es", src: "/captions/spanish.vtt" },
+]
+
 export default function VideoPlayer({
   id = "nova-player-main",
-  src = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+  src = "/sample-videos/cosmic-horizons.mp4",
   title = "Cosmic Horizons: The Deep Space Explorer",
   poster = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80",
   autoPlay = false,
-  subtitles = [
-    { id: "sub-en", label: "English", language: "en", src: "/captions/english.vtt", default: true },
-    { id: "sub-es", label: "Español", language: "es", src: "/captions/spanish.vtt" },
-  ],
+  subtitles = DEFAULT_SUBTITLES,
   thumbnails,
   className = "",
   onTimeUpdate,
@@ -259,10 +261,78 @@ export default function VideoPlayer({
     }
   }, [setIsPiPSupported])
 
-  // 11. Initial subtitles setup
+  // 11. Initial & dynamic subtitles setup with stability guards
+  const prevSubtitlesRef = useRef<SubtitleTrack[] | null>(null)
   useEffect(() => {
-    setAvailableSubtitles(subtitles)
-  }, [subtitles, setAvailableSubtitles])
+    const currentSubs = subtitles || []
+    const prev = prevSubtitlesRef.current
+    const isUnchanged =
+      prev !== null &&
+      prev.length === currentSubs.length &&
+      prev.every(
+        (t, i) =>
+          t.id === currentSubs[i]?.id &&
+          t.language === currentSubs[i]?.language &&
+          t.src === currentSubs[i]?.src &&
+          t.default === currentSubs[i]?.default
+      )
+
+    if (!isUnchanged) {
+      prevSubtitlesRef.current = currentSubs
+      setAvailableSubtitles(currentSubs)
+
+      // Automatically configure default subtitle if not already selected
+      if (!activeSubtitleTrack && currentSubs.length > 0) {
+        const defaultTrack = currentSubs.find((t) => t.default)
+        if (defaultTrack) {
+          setActiveSubtitleTrack(defaultTrack.language)
+        }
+      } else if (activeSubtitleTrack && !currentSubs.some((t) => t.language === activeSubtitleTrack)) {
+        // If current selection is no longer in track list, fallback to null
+        setActiveSubtitleTrack(null)
+      }
+    }
+  }, [subtitles, activeSubtitleTrack, setAvailableSubtitles, setActiveSubtitleTrack])
+
+  // Synchronize native HTML5 textTracks state whenever activeSubtitleTrack changes
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !video.textTracks) return
+
+    for (let i = 0; i < video.textTracks.length; i++) {
+      const track = video.textTracks[i]
+      if (activeSubtitleTrack && track.language === activeSubtitleTrack) {
+        track.mode = "showing"
+      } else {
+        track.mode = "disabled"
+      }
+    }
+  }, [activeSubtitleTrack])
+
+  // Register text-track change listener to sync browser-native track changes
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !video.textTracks) return
+
+    const trackList = video.textTracks
+    const handleNativeTrackChange = () => {
+      let showingLang: string | null = null
+      for (let i = 0; i < trackList.length; i++) {
+        if (trackList[i].mode === "showing") {
+          showingLang = trackList[i].language
+          break
+        }
+      }
+      if (showingLang !== activeSubtitleTrack) {
+        setActiveSubtitleTrack(showingLang)
+      }
+    }
+
+    trackList.addEventListener("change", handleNativeTrackChange)
+    return () => {
+      trackList.removeEventListener("change", handleNativeTrackChange)
+    }
+  }, [activeSubtitleTrack, setActiveSubtitleTrack])
 
   // 12. Fullscreen change listener
   useEffect(() => {
@@ -390,7 +460,27 @@ export default function VideoPlayer({
     setIsLoading(false)
     setIsBuffering(false)
     setIsPlaying(false)
-    setError("Unable to stream video. Please verify your connection or try another source.")
+    const mediaError = videoRef.current?.error
+    let message = "Unable to load video stream. Please verify your connection or try another source."
+    if (mediaError) {
+      switch (mediaError.code) {
+        case 1: // MEDIA_ERR_ABORTED
+          message = "Video playback was aborted by the client."
+          break
+        case 2: // MEDIA_ERR_NETWORK
+          message = "A network error prevented video data from loading."
+          break
+        case 3: // MEDIA_ERR_DECODE
+          message = "Video playback encountered a decoding or corruption error."
+          break
+        case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+          message = "Video resource is unavailable, restricted (HTTP 403/404), or in an unsupported format."
+          break
+        default:
+          message = `Stream error (${mediaError.message || "Code " + mediaError.code}).`
+      }
+    }
+    setError(message)
   }
 
   // Picture in picture event listeners
