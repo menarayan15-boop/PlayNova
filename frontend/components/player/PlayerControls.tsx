@@ -1,22 +1,50 @@
 "use client"
 
 import React from "react"
-import ProgressBar from "./ProgressBar"
+import { PlaybackSpeed, SubtitleTrack, ThumbnailPreview } from "@/types"
+import PlayPauseButton from "./PlayPauseButton"
+import VolumeControl from "./VolumeControl"
+import VideoTimeline from "./VideoTimeline"
+import VideoSettingsMenu from "./VideoSettingsMenu"
+import FullscreenButton from "./FullscreenButton"
+import PictureInPictureButton from "./PictureInPictureButton"
+import TheaterModeButton from "./TheaterModeButton"
 
 interface PlayerControlsProps {
   isPlaying: boolean
-  isMuted: boolean
+  isEnded: boolean
   volume: number
+  isMuted: boolean
   currentTime: number
   duration: number
-  buffered?: number
+  bufferedTime: number
+  playbackSpeed: PlaybackSpeed
+  subtitles: SubtitleTrack[]
+  activeSubtitleLanguage: string | null
+  qualityResolution: string
+  showRemainingTime: boolean
+  isTheaterMode: boolean
   isFullscreen: boolean
+  isPiP: boolean
+  isPiPSupported: boolean
+  isSettingsOpen: boolean
+  thumbnails?: ThumbnailPreview[]
   onTogglePlay: () => void
-  onToggleMute: () => void
-  onVolumeChange: (vol: number) => void
   onSeek: (time: number) => void
   onSeekRelative: (seconds: number) => void
+  onVolumeChange: (vol: number) => void
+  onToggleMute: () => void
+  onToggleRemainingTime: () => void
+  onSelectSpeed: (speed: PlaybackSpeed) => void
+  onSelectSubtitle: (lang: string | null) => void
+  onToggleSubtitles: () => void
+  onToggleTheaterMode: () => void
   onToggleFullscreen: () => void
+  onTogglePiP: () => void
+  onToggleSettings: () => void
+  onToggleHelpModal: () => void
+  onScrubStart?: () => void
+  onScrubEnd?: () => void
 }
 
 function formatTime(seconds: number): string {
@@ -34,67 +62,84 @@ function formatTime(seconds: number): string {
 
 export default function PlayerControls({
   isPlaying,
-  isMuted,
+  isEnded,
   volume,
+  isMuted,
   currentTime,
   duration,
-  buffered = 0,
+  bufferedTime,
+  playbackSpeed,
+  subtitles,
+  activeSubtitleLanguage,
+  qualityResolution,
+  showRemainingTime,
+  isTheaterMode,
   isFullscreen,
+  isPiP,
+  isPiPSupported,
+  isSettingsOpen,
+  thumbnails,
   onTogglePlay,
-  onToggleMute,
-  onVolumeChange,
   onSeek,
   onSeekRelative,
+  onVolumeChange,
+  onToggleMute,
+  onToggleRemainingTime,
+  onSelectSpeed,
+  onSelectSubtitle,
+  onToggleSubtitles,
+  onToggleTheaterMode,
   onToggleFullscreen,
+  onTogglePiP,
+  onToggleSettings,
+  onToggleHelpModal,
+  onScrubStart,
+  onScrubEnd,
 }: PlayerControlsProps) {
-  const effectiveVolume = isMuted ? 0 : volume
+  const remainingSeconds = Math.max(0, duration - currentTime)
+  const formattedTimeDisplay = showRemainingTime
+    ? `-${formatTime(remainingSeconds)}`
+    : `${formatTime(currentTime)} / ${formatTime(duration)}`
 
   return (
-    <div className="absolute inset-x-0 bottom-0 px-4 py-3 bg-gradient-to-t from-black/85 via-black/40 to-transparent transition-opacity duration-300 z-20 flex flex-col gap-2">
-      {/* Progress scrub bar */}
-      <ProgressBar
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="absolute inset-x-0 bottom-0 px-4 py-3 bg-gradient-to-t from-black/90 via-black/50 to-transparent transition-opacity duration-300 z-20 flex flex-col gap-2 select-none"
+    >
+      {/* Interactive Timeline with Scrubbing and Thumbnail Previews */}
+      <VideoTimeline
         currentTime={currentTime}
         duration={duration}
-        buffered={buffered}
+        bufferedTime={bufferedTime}
+        thumbnails={thumbnails}
         onSeek={onSeek}
+        onScrubStart={onScrubStart}
+        onScrubEnd={onScrubEnd}
       />
 
-      {/* Control row */}
+      {/* Control Buttons Row */}
       <div className="flex items-center justify-between text-[#eef2ec] text-sm">
-        {/* Left controls: Play/Pause, Replay 10s, Forward 10s, Volume, Time */}
-        <div className="flex items-center gap-3">
-          {/* Play / Pause button */}
-          <button
-            type="button"
+        {/* Left Controls: Play, Seek -10/+10, Volume, Time Display */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          <PlayPauseButton
+            isPlaying={isPlaying}
+            isEnded={isEnded}
             onClick={onTogglePlay}
-            aria-label={isPlaying ? "Pause video" : "Play video"}
-            className="w-9 h-9 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/25 active:scale-95 transition-all text-[#eef2ec] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8c7b33]"
-          >
-            {isPlaying ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="6" y="4" width="4" height="16" rx="1.5" />
-                <rect x="14" y="4" width="4" height="16" rx="1.5" />
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5">
-                <path d="M6 4.5V19.5L19 12L6 4.5Z" />
-              </svg>
-            )}
-          </button>
+          />
 
           {/* Seek backward 10s */}
           <button
             type="button"
             onClick={() => onSeekRelative(-10)}
             aria-label="Rewind 10 seconds"
-            title="Rewind 10s"
-            className="p-1.5 rounded-lg hover:bg-white/15 active:scale-95 text-[#eef2ec]/85 hover:text-[#eef2ec] transition-all flex items-center gap-0.5 text-xs"
+            title="Rewind 10s (←)"
+            className="p-1.5 rounded-lg hover:bg-white/15 active:scale-95 text-[#eef2ec]/85 hover:text-[#eef2ec] transition-all flex items-center gap-0.5 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8c7b33]"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
               <path d="M3 3v5h5" />
             </svg>
-            <span className="text-[11px] font-mono">-10s</span>
+            <span className="hidden sm:inline text-[11px] font-mono">-10s</span>
           </button>
 
           {/* Seek forward 10s */}
@@ -102,96 +147,122 @@ export default function PlayerControls({
             type="button"
             onClick={() => onSeekRelative(10)}
             aria-label="Fast forward 10 seconds"
-            title="Forward 10s"
-            className="p-1.5 rounded-lg hover:bg-white/15 active:scale-95 text-[#eef2ec]/85 hover:text-[#eef2ec] transition-all flex items-center gap-0.5 text-xs"
+            title="Forward 10s (→)"
+            className="p-1.5 rounded-lg hover:bg-white/15 active:scale-95 text-[#eef2ec]/85 hover:text-[#eef2ec] transition-all flex items-center gap-0.5 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8c7b33]"
           >
-            <span className="text-[11px] font-mono">+10s</span>
+            <span className="hidden sm:inline text-[11px] font-mono">+10s</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
               <path d="M21 3v5h-5" />
             </svg>
           </button>
 
-          {/* Volume slider & mute/unmute */}
-          <div className="flex items-center gap-2 group/vol relative">
+          {/* Volume Control */}
+          <VolumeControl
+            volume={volume}
+            isMuted={isMuted}
+            onVolumeChange={onVolumeChange}
+            onToggleMute={onToggleMute}
+          />
+
+          {/* Time Display (Click to toggle remaining time) */}
+          <button
+            type="button"
+            onClick={onToggleRemainingTime}
+            title="Click to toggle current vs remaining time"
+            aria-label="Toggle playback time display format"
+            className="text-[12px] font-mono text-[#eef2ec]/80 hover:text-[#eef2ec] tracking-tight ml-1 px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors"
+          >
+            {formattedTimeDisplay}
+          </button>
+        </div>
+
+        {/* Right Controls: Subtitles, Settings, PiP, Theater, Fullscreen, Help */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* Quick Subtitle Toggle Button */}
+          {subtitles.length > 0 && (
             <button
               type="button"
-              onClick={onToggleMute}
-              aria-label={isMuted || volume === 0 ? "Unmute audio" : "Mute audio"}
-              className="p-1.5 rounded-lg hover:bg-white/15 text-[#eef2ec]/85 hover:text-[#eef2ec] transition-all"
+              onClick={onToggleSubtitles}
+              aria-label={activeSubtitleLanguage ? "Disable subtitles (C)" : "Enable subtitles (C)"}
+              title={activeSubtitleLanguage ? `Subtitles: ${activeSubtitleLanguage.toUpperCase()} (C)` : "Enable Subtitles (C)"}
+              className={`p-1.5 rounded-lg active:scale-95 transition-all text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8c7b33] ${
+                activeSubtitleLanguage
+                  ? "bg-[#cdc8f6]/30 text-[#cdc8f6] font-semibold"
+                  : "hover:bg-white/15 text-[#eef2ec]/75 hover:text-[#eef2ec]"
+              }`}
             >
-              {isMuted || volume === 0 ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                  <line x1="23" y1="9" x2="17" y2="15" />
-                  <line x1="17" y1="9" x2="23" y2="15" />
-                </svg>
-              ) : volume < 0.5 ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                </svg>
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                </svg>
-              )}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="M7 15h4M15 15h2M7 11h2M13 11h4" />
+              </svg>
+            </button>
+          )}
+
+          {/* Settings Menu Gear Button */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={onToggleSettings}
+              aria-label="Player settings"
+              aria-expanded={isSettingsOpen}
+              title="Settings (Speed, Subtitles, Quality)"
+              className={`p-1.5 rounded-lg active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8c7b33] ${
+                isSettingsOpen
+                  ? "bg-[#8c7b33]/30 text-[#8c7b33]"
+                  : "hover:bg-white/15 text-[#eef2ec]/85 hover:text-[#eef2ec]"
+              }`}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
             </button>
 
-            {/* Volume slider */}
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={effectiveVolume}
-              onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-              aria-label="Audio volume"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(effectiveVolume * 100)}
-              className="w-16 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-[#8c7b33] hover:h-1.5 transition-all"
+            {/* Popup Settings Menu */}
+            <VideoSettingsMenu
+              isOpen={isSettingsOpen}
+              currentSpeed={playbackSpeed}
+              subtitles={subtitles}
+              activeSubtitleLanguage={activeSubtitleLanguage}
+              qualityResolution={qualityResolution}
+              onSelectSpeed={onSelectSpeed}
+              onSelectSubtitle={onSelectSubtitle}
+              onClose={onToggleSettings}
             />
           </div>
 
-          {/* Time display: Current / Total */}
-          <div className="text-[12px] font-mono text-[#eef2ec]/75 tracking-tight ml-1">
-            <span className="text-[#eef2ec] font-medium">{formatTime(currentTime)}</span>
-            <span className="mx-1 text-[#eef2ec]/40">/</span>
-            <span>{formatTime(duration)}</span>
-          </div>
-        </div>
+          {/* Picture-in-Picture Button */}
+          <PictureInPictureButton
+            isPiP={isPiP}
+            isSupported={isPiPSupported}
+            onClick={onTogglePiP}
+          />
 
-        {/* Right controls: Quality pill, Fullscreen */}
-        <div className="flex items-center gap-3">
-          {/* HD Quality indicator pill */}
-          <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-white/10 text-[#cdc8f6] border border-[#cdc8f6]/30">
-            1080p HD
-          </span>
+          {/* Theater Mode Button */}
+          <TheaterModeButton
+            isTheaterMode={isTheaterMode}
+            onClick={onToggleTheaterMode}
+          />
 
-          {/* Fullscreen button */}
+          {/* Fullscreen Button */}
+          <FullscreenButton
+            isFullscreen={isFullscreen}
+            onClick={onToggleFullscreen}
+          />
+
+          {/* Keyboard Shortcuts Help Button */}
           <button
             type="button"
-            onClick={onToggleFullscreen}
-            aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-            className="p-1.5 rounded-lg hover:bg-white/15 text-[#eef2ec]/85 hover:text-[#eef2ec] transition-all"
+            onClick={onToggleHelpModal}
+            aria-label="Keyboard shortcuts guide"
+            title="Keyboard Shortcuts (?)"
+            className="p-1.5 rounded-lg hover:bg-white/15 text-[#eef2ec]/75 hover:text-[#eef2ec] text-xs font-mono font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8c7b33]"
           >
-            {isFullscreen ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-              </svg>
-            )}
+            ?
           </button>
         </div>
       </div>
     </div>
   )
 }
-

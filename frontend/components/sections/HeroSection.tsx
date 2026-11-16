@@ -218,10 +218,19 @@ export default function HeroSection() {
           >
             {/* The real functional HTML5 Video Player */}
             <VideoPlayer
+              id="hero-player"
               src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
               title="Cosmic Horizons: The Deep Space Explorer"
               poster="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80"
               autoPlay={false}
+              thumbnails={[
+                { time: 0, imageUrl: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=300&q=70" },
+                { time: 60, imageUrl: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=300&q=70" },
+                { time: 180, imageUrl: "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=300&q=70" },
+                { time: 300, imageUrl: "https://images.unsplash.com/photo-1447433589675-4aaa569f3e05?auto=format&fit=crop&w=300&q=70" },
+                { time: 480, imageUrl: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=300&q=70" },
+                { time: 600, imageUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=300&q=70" },
+              ]}
               className="rounded-xl"
             />
           </div>
