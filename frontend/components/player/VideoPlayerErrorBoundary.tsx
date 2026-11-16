@@ -86,3 +86,4 @@ export class VideoPlayerErrorBoundary extends Component<Props, State> {
 }
 
 export default VideoPlayerErrorBoundary
+

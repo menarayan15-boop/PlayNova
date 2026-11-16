@@ -6,7 +6,6 @@ import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 import VideoPlayer from "../player/VideoPlayer"
 import VideoPlayerErrorBoundary from "../player/VideoPlayerErrorBoundary"
-import { ContinueWatchingCard, SmartPlaybackCard } from "../ui/FloatingCard"
 import { useReducedMotion } from "@/hooks/useReducedMotion"
 import { ThumbnailPreview } from "@/types"
 
@@ -23,8 +22,6 @@ export default function HeroSection() {
   const heroRef = useRef<HTMLElement>(null)
   const deviceWrapRef = useRef<HTMLDivElement>(null)
   const deviceRef = useRef<HTMLDivElement>(null)
-  const float1Ref = useRef<HTMLDivElement>(null)
-  const float2Ref = useRef<HTMLDivElement>(null)
   const reduced = useReducedMotion()
 
   useEffect(() => {
@@ -65,16 +62,6 @@ export default function HeroSection() {
           },
           "-=0.7"
         )
-        .from(
-          [float1Ref.current, float2Ref.current],
-          {
-            x: 60,
-            autoAlpha: 0,
-            duration: 1,
-            stagger: 0.15,
-          },
-          "-=0.8"
-        )
 
       // Perspective tilt & scroll straightening
       if (deviceRef.current && deviceWrapRef.current) {
@@ -98,35 +85,6 @@ export default function HeroSection() {
             },
           }
         )
-      }
-
-      // Parallax scroll on floating cards
-      if (float1Ref.current) {
-        gsap.to(float1Ref.current, {
-          y: -80,
-          rotate: -2,
-          ease: "none",
-          scrollTrigger: {
-            trigger: hero,
-            start: "top top",
-            end: "bottom top",
-            scrub: true,
-          },
-        })
-      }
-
-      if (float2Ref.current) {
-        gsap.to(float2Ref.current, {
-          y: -120,
-          rotate: 2,
-          ease: "none",
-          scrollTrigger: {
-            trigger: hero,
-            start: "top top",
-            end: "bottom top",
-            scrub: true,
-          },
-        })
       }
     })
 
@@ -239,36 +197,6 @@ export default function HeroSection() {
                 className="rounded-xl"
               />
             </VideoPlayerErrorBoundary>
-          </div>
-
-          {/* Floating animated Cards inspired by template */}
-          <div className="hidden lg:block pointer-events-none">
-            {/* Card 1: Continue Watching (Top Right) */}
-            <div
-              ref={float1Ref}
-              className="absolute -right-8 -top-8 z-20 pointer-events-auto"
-            >
-              <ContinueWatchingCard
-                title="Cosmic Horizons"
-                category="Space"
-                progressTime="12:14"
-                totalTime="18:24"
-                progressPercent={66}
-              />
-            </div>
-
-            {/* Card 2: Smart Playback (Bottom Left) */}
-            <div
-              ref={float2Ref}
-              className="absolute -left-10 -bottom-8 z-20 pointer-events-auto"
-            >
-              <SmartPlaybackCard
-                speed="1.5x"
-                quality="4K UHD 60fps"
-                subtitles="English [CC]"
-                audio="Dolby Atmos"
-              />
-            </div>
           </div>
         </div>
       </div>
