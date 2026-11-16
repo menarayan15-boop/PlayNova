@@ -12,3 +12,4 @@ router.post("/refresh", AuthController.refresh)
 router.get("/me", requireAuth, AuthController.getMe)
 
 export default router
+

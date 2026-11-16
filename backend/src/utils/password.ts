@@ -54,3 +54,4 @@ export function validatePasswordStrength(password: string): PasswordStrengthResu
     score,
   }
 }
+

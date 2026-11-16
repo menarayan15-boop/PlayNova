@@ -38,3 +38,4 @@ export function clearAuthCookies(res: Response): void {
     path: "/",
   })
 }
+

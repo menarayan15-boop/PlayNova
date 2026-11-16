@@ -11,3 +11,4 @@ router.get("/me/preferences", requireAuth, UserController.getPreferences)
 router.patch("/me/preferences", requireAuth, UserController.updatePreferences)
 
 export default router
+

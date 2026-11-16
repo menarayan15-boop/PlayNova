@@ -37,3 +37,4 @@ export function getRefreshTokenExpiry(): Date {
   date.setDate(date.getDate() + 7) // 7 days default
   return date
 }
+
