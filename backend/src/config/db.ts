@@ -19,6 +19,15 @@ export async function connectDB(): Promise<boolean> {
     return false
   }
 
+  // Prevent connecting to placeholder URIs
+  if (config.mongodbUri.includes("YOUR_CLUSTER") || config.mongodbUri.includes("<username>")) {
+    console.warn(
+      "[Database] MONGODB_URI contains placeholder host ('YOUR_CLUSTER'). Database running in in-memory fallback mode until actual MongoDB Atlas cluster is configured."
+    )
+    isConnected = false
+    return false
+  }
+
   // Prevent duplicate connections if already connected
   if (mongoose.connection.readyState === 1) {
     isConnected = true
@@ -45,6 +54,12 @@ export async function connectDB(): Promise<boolean> {
     isConnected = false
     const msg = error instanceof Error ? error.message : String(error)
     console.error("[Database] MongoDB connection failed:", sanitizeMongoUri(msg))
+    // Disconnect Mongoose to halt background reconnection attempts that crash Node
+    try {
+      await mongoose.disconnect()
+    } catch {
+      // ignore
+    }
     return false
   }
 }
@@ -86,6 +101,8 @@ export function getDatabaseStatus(): {
   let message = "Database unconfigured"
   if (!configured) {
     message = "MONGODB_URI not provided; running with in-memory store"
+  } else if (config.mongodbUri.includes("YOUR_CLUSTER") || config.mongodbUri.includes("<username>")) {
+    message = "MONGODB_URI contains placeholder host (YOUR_CLUSTER); running with in-memory store"
   } else if (connected) {
     message = "Connected to MongoDB Atlas"
   } else if (readyState === 2) {
