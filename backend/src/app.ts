@@ -1,12 +1,23 @@
 import express, { Express, Request, Response } from "express"
 import cors from "cors"
+import cookieParser from "cookie-parser"
 import healthRoutes from "./routes/healthRoutes.js"
 import videoRoutes from "./routes/videoRoutes.js"
+import authRoutes from "./routes/authRoutes.js"
+import userRoutes from "./routes/userRoutes.js"
 import { errorHandler } from "./middleware/errorHandler.js"
 import { config } from "./config/env.js"
 
 export function createApp(): Express {
   const app = express()
+
+  // Security Headers
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff")
+    res.setHeader("X-Frame-Options", "SAMEORIGIN")
+    res.setHeader("X-XSS-Protection", "1; mode=block")
+    next()
+  })
 
   // CORS configuration
   app.use(
@@ -21,14 +32,21 @@ export function createApp(): Express {
       },
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
+      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
     })
   )
 
   app.use(express.json())
   app.use(express.urlencoded({ extended: true }))
+  app.use(cookieParser(config.cookieSecret))
 
-  // Routes
+  // Versioned v1 Routes
+  app.use("/api/v1/auth", authRoutes)
+  app.use("/api/v1/users", userRoutes)
+
+  // Backward-compatible unversioned route aliases
+  app.use("/api/auth", authRoutes)
+  app.use("/api/users", userRoutes)
   app.use("/api", healthRoutes)
   app.use("/api", videoRoutes)
 
@@ -45,4 +63,3 @@ export function createApp(): Express {
 
   return app
 }
-

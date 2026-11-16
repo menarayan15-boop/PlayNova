@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import PlayNovaLogo from "../ui/PlayNovaLogo"
+import { useAuthStore } from "@/stores/useAuthStore"
 
 interface NavbarProps {
   onGetStartedClick?: () => void
@@ -14,6 +15,9 @@ export default function Navbar({ onGetStartedClick }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [scrollProgress, setScrollProgress] = useState(0)
   const pathname = usePathname()
+  const router = useRouter()
+
+  const { user, isAuthenticated, logout } = useAuthStore()
 
   useEffect(() => {
     const handleScroll = () => {
@@ -31,12 +35,20 @@ export default function Navbar({ onGetStartedClick }: NavbarProps) {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  const navLinks = [
-    { label: "Home", href: "/" },
-    { label: "Explore", href: "/explore" },
-    { label: "Features", href: "/#features" },
-    { label: "About", href: "/#benefits" },
-  ]
+  // Navigation Links depending on authentication status
+  const navLinks = isAuthenticated
+    ? [
+        { label: "Home", href: "/" },
+        { label: "Explore", href: "/explore" },
+        { label: "Profile", href: "/profile" },
+        { label: "Settings", href: "/settings" },
+      ]
+    : [
+        { label: "Home", href: "/" },
+        { label: "Explore", href: "/explore" },
+        { label: "Features", href: "/#features" },
+        { label: "About", href: "/#benefits" },
+      ]
 
   const handleNavClick = (href: string) => (e: React.MouseEvent) => {
     setMobileMenuOpen(false)
@@ -48,6 +60,12 @@ export default function Navbar({ onGetStartedClick }: NavbarProps) {
         el.scrollIntoView({ behavior: "smooth" })
       }
     }
+  }
+
+  const handleLogout = async () => {
+    setMobileMenuOpen(false)
+    await logout()
+    router.push("/")
   }
 
   return (
@@ -86,27 +104,53 @@ export default function Navbar({ onGetStartedClick }: NavbarProps) {
           })}
         </nav>
 
-        {/* Action Buttons (Sign In / Get Started) */}
+        {/* Desktop Action Buttons / User Menu */}
         <div className="hidden sm:flex items-center gap-3">
-          <Link
-            href="/explore"
-            className="text-[13.5px] font-medium text-[#66726f] hover:text-[#10292d] px-3 py-1.5 transition-colors"
-          >
-            Sign In
-          </Link>
-          <a
-            href="/#cta"
-            onClick={(e) => {
-              if (pathname === "/") {
-                e.preventDefault()
-                document.getElementById("cta")?.scrollIntoView({ behavior: "smooth" })
-              }
-              onGetStartedClick?.()
-            }}
-            className="inline-flex items-center justify-center px-4 py-2 rounded-full text-[13px] font-semibold bg-[#0f3238] text-[#ffffff] hover:bg-[#10292d] hover:shadow-[0_10px_20px_-10px_#0f3238] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
-          >
-            Get Started
-          </a>
+          {isAuthenticated && user ? (
+            <div className="flex items-center gap-3">
+              <Link
+                href="/profile"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[#e2e0d6] hover:border-[#8c7b33]/40 shadow-sm transition-all text-xs font-medium text-[#10292d]"
+              >
+                {user.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={user.avatarUrl}
+                    alt={user.fullName}
+                    className="w-5 h-5 rounded-full object-cover"
+                  />
+                ) : (
+                  <span className="w-5 h-5 rounded-full bg-[#0f3238] text-[#f5f4ee] flex items-center justify-center text-[10px]">
+                    {user.fullName.charAt(0)}
+                  </span>
+                )}
+                <span className="max-w-[120px] truncate">{user.fullName.split(" ")[0]}</span>
+              </Link>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="text-[13px] font-medium text-[#66726f] hover:text-red-700 px-2.5 py-1.5 transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="text-[13.5px] font-medium text-[#66726f] hover:text-[#10292d] px-3 py-1.5 transition-colors"
+              >
+                Sign In
+              </Link>
+              <Link
+                href="/register"
+                onClick={onGetStartedClick}
+                className="inline-flex items-center justify-center px-4 py-2 rounded-full text-[13px] font-semibold bg-[#0f3238] text-[#ffffff] hover:bg-[#10292d] hover:shadow-[0_10px_20px_-10px_#0f3238] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
+              >
+                Get Started
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile Hamburger Button */}
@@ -150,27 +194,37 @@ export default function Navbar({ onGetStartedClick }: NavbarProps) {
               </Link>
             ))}
             <div className="pt-3 mt-2 border-t border-[#e2e0d6] flex flex-col gap-2">
-              <Link
-                href="/explore"
-                onClick={() => setMobileMenuOpen(false)}
-                className="w-full py-2.5 text-center text-sm font-medium text-[#10292d] border border-[#e2e0d6] rounded-full"
-              >
-                Sign In
-              </Link>
-              <a
-                href="/#cta"
-                onClick={(e) => {
-                  setMobileMenuOpen(false)
-                  if (pathname === "/") {
-                    e.preventDefault()
-                    document.getElementById("cta")?.scrollIntoView({ behavior: "smooth" })
-                  }
-                  onGetStartedClick?.()
-                }}
-                className="w-full py-2.5 text-center text-sm font-semibold bg-[#0f3238] text-[#ffffff] rounded-full shadow-md"
-              >
-                Get Started
-              </a>
+              {isAuthenticated && user ? (
+                <>
+                  <div className="px-4 py-2 text-xs font-mono text-[#66726f]">
+                    Signed in as <span className="font-semibold text-[#10292d]">{user.email}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="w-full py-2.5 text-center text-sm font-medium text-red-700 border border-red-200 rounded-full hover:bg-red-50"
+                  >
+                    Sign Out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="w-full py-2.5 text-center text-sm font-medium text-[#10292d] border border-[#e2e0d6] rounded-full"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    href="/register"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="w-full py-2.5 text-center text-sm font-semibold bg-[#0f3238] text-[#ffffff] rounded-full shadow-md"
+                  >
+                    Get Started
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -185,4 +239,3 @@ export default function Navbar({ onGetStartedClick }: NavbarProps) {
     </header>
   )
 }
-

@@ -70,3 +70,32 @@ export interface NavItem {
   label: string
   href: string
 }
+
+// User & Authentication Types for Phase 3
+export interface UserPreferences {
+  preferredSpeed: number
+  preferredSubtitle: string | null
+  autoplay: boolean
+  preferredTheme: string
+  defaultVolume: number
+}
+
+export interface User {
+  id: string
+  fullName: string
+  email: string
+  role: "user" | "admin"
+  avatarUrl?: string
+  lastLoginAt?: string
+  preferences: UserPreferences
+  createdAt: string
+  updatedAt?: string
+}
+
+export interface AuthResponse {
+  status: "success" | "error"
+  message?: string
+  data?: {
+    user: User
+  }
+}

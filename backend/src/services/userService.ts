@@ -1,0 +1,497 @@
+import { User, IUser, SafeUserDTO, IUserPreferences, IRefreshToken } from "../models/User.js"
+import { isDatabaseConnected } from "../config/db.js"
+import { hashPassword, comparePassword, validatePasswordStrength } from "../utils/password.js"
+import {
+  generateAccessToken,
+  generateRefreshTokenString,
+  hashRefreshToken,
+  getRefreshTokenExpiry,
+} from "../utils/token.js"
+
+// In-Memory fallback store for when MONGODB_URI is not yet configured
+interface InMemoryUser {
+  id: string
+  fullName: string
+  email: string
+  passwordHash: string
+  role: "user" | "admin"
+  avatarUrl?: string
+  lastLoginAt?: Date
+  preferences: IUserPreferences
+  refreshTokens: IRefreshToken[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+const memoryUsers: Map<string, InMemoryUser> = new Map()
+
+function toSafeMemoryUser(u: InMemoryUser): SafeUserDTO {
+  return {
+    id: u.id,
+    fullName: u.fullName,
+    email: u.email,
+    role: u.role,
+    avatarUrl: u.avatarUrl,
+    lastLoginAt: u.lastLoginAt,
+    preferences: u.preferences,
+    createdAt: u.createdAt,
+    updatedAt: u.updatedAt,
+  }
+}
+
+export class UserService {
+  /**
+   * Register a new user
+   */
+  static async register(
+    fullName: string,
+    email: string,
+    passwordPlain: string
+  ): Promise<{ user: SafeUserDTO; accessToken: string; refreshToken: string }> {
+    const cleanEmail = email.trim().toLowerCase()
+    const cleanName = fullName.trim()
+
+    // Validate email format
+    const emailRegex = /^\S+@\S+\.\S+$/
+    if (!emailRegex.test(cleanEmail)) {
+      throw new Error("Please provide a valid email address")
+    }
+
+    // Validate password strength
+    const strength = validatePasswordStrength(passwordPlain)
+    if (!strength.valid) {
+      throw new Error(strength.errors[0])
+    }
+
+    const passwordHash = await hashPassword(passwordPlain)
+    const rawRefreshToken = generateRefreshTokenString()
+    const hashedRefresh = hashRefreshToken(rawRefreshToken)
+    const refreshExpiry = getRefreshTokenExpiry()
+
+    const initialPreferences: IUserPreferences = {
+      preferredSpeed: 1,
+      preferredSubtitle: "en",
+      autoplay: false,
+      preferredTheme: "cream",
+      defaultVolume: 0.8,
+    }
+
+    if (isDatabaseConnected()) {
+      // Check existing in MongoDB
+      const existing = await User.findOne({ email: cleanEmail })
+      if (existing) {
+        throw new Error("An account with this email address already exists")
+      }
+
+      const newUser = new User({
+        fullName: cleanName,
+        email: cleanEmail,
+        passwordHash,
+        role: "user",
+        avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(cleanName)}&backgroundColor=0f3238&textColor=f5f4ee`,
+        preferences: initialPreferences,
+        refreshTokens: [
+          {
+            tokenHash: hashedRefresh,
+            expiresAt: refreshExpiry,
+            createdAt: new Date(),
+          },
+        ],
+      })
+
+      await newUser.save()
+      const safe = newUser.toSafeUser()
+      const accessToken = generateAccessToken({
+        userId: safe.id,
+        email: safe.email,
+        role: safe.role,
+      })
+
+      return { user: safe, accessToken, refreshToken: rawRefreshToken }
+    } else {
+      // In-memory fallback
+      for (const u of memoryUsers.values()) {
+        if (u.email === cleanEmail) {
+          throw new Error("An account with this email address already exists")
+        }
+      }
+
+      const id = "mem_" + Date.now().toString(36) + Math.random().toString(36).substring(2, 7)
+      const now = new Date()
+      const inMem: InMemoryUser = {
+        id,
+        fullName: cleanName,
+        email: cleanEmail,
+        passwordHash,
+        role: "user",
+        avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(cleanName)}&backgroundColor=0f3238&textColor=f5f4ee`,
+        preferences: initialPreferences,
+        refreshTokens: [
+          {
+            tokenHash: hashedRefresh,
+            expiresAt: refreshExpiry,
+            createdAt: now,
+          },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      }
+      memoryUsers.set(id, inMem)
+
+      const safe = toSafeMemoryUser(inMem)
+      const accessToken = generateAccessToken({
+        userId: safe.id,
+        email: safe.email,
+        role: safe.role,
+      })
+
+      return { user: safe, accessToken, refreshToken: rawRefreshToken }
+    }
+  }
+
+  /**
+   * Log in user with email & password
+   */
+  static async login(
+    email: string,
+    passwordPlain: string
+  ): Promise<{ user: SafeUserDTO; accessToken: string; refreshToken: string }> {
+    const cleanEmail = email.trim().toLowerCase()
+
+    const rawRefreshToken = generateRefreshTokenString()
+    const hashedRefresh = hashRefreshToken(rawRefreshToken)
+    const refreshExpiry = getRefreshTokenExpiry()
+
+    if (isDatabaseConnected()) {
+      const user = await User.findOne({ email: cleanEmail }).select("+passwordHash +refreshTokens")
+      if (!user) {
+        throw new Error("Invalid email or password")
+      }
+
+      const match = await comparePassword(passwordPlain, user.passwordHash)
+      if (!match) {
+        throw new Error("Invalid email or password")
+      }
+
+      user.lastLoginAt = new Date()
+      // Prune expired tokens and append new
+      const now = new Date()
+      user.refreshTokens = user.refreshTokens.filter((rt) => rt.expiresAt > now)
+      user.refreshTokens.push({
+        tokenHash: hashedRefresh,
+        expiresAt: refreshExpiry,
+        createdAt: now,
+      })
+
+      await user.save()
+      const safe = user.toSafeUser()
+      const accessToken = generateAccessToken({
+        userId: safe.id,
+        email: safe.email,
+        role: safe.role,
+      })
+
+      return { user: safe, accessToken, refreshToken: rawRefreshToken }
+    } else {
+      // In-memory fallback
+      let foundUser: InMemoryUser | null = null
+      for (const u of memoryUsers.values()) {
+        if (u.email === cleanEmail) {
+          foundUser = u
+          break
+        }
+      }
+
+      if (!foundUser) {
+        throw new Error("Invalid email or password")
+      }
+
+      const match = await comparePassword(passwordPlain, foundUser.passwordHash)
+      if (!match) {
+        throw new Error("Invalid email or password")
+      }
+
+      const now = new Date()
+      foundUser.lastLoginAt = now
+      foundUser.refreshTokens = foundUser.refreshTokens.filter((rt) => rt.expiresAt > now)
+      foundUser.refreshTokens.push({
+        tokenHash: hashedRefresh,
+        expiresAt: refreshExpiry,
+        createdAt: now,
+      })
+      foundUser.updatedAt = now
+
+      const safe = toSafeMemoryUser(foundUser)
+      const accessToken = generateAccessToken({
+        userId: safe.id,
+        email: safe.email,
+        role: safe.role,
+      })
+
+      return { user: safe, accessToken, refreshToken: rawRefreshToken }
+    }
+  }
+
+  /**
+   * Refresh session using refresh token string
+   */
+  static async refresh(
+    rawRefreshToken: string
+  ): Promise<{ user: SafeUserDTO; accessToken: string; refreshToken: string }> {
+    if (!rawRefreshToken) {
+      throw new Error("Refresh token required")
+    }
+
+    const hashed = hashRefreshToken(rawRefreshToken)
+    const newRawRefresh = generateRefreshTokenString()
+    const newHashedRefresh = hashRefreshToken(newRawRefresh)
+    const newExpiry = getRefreshTokenExpiry()
+    const now = new Date()
+
+    if (isDatabaseConnected()) {
+      const user = await User.findOne({
+        "refreshTokens.tokenHash": hashed,
+      }).select("+refreshTokens")
+
+      if (!user) {
+        throw new Error("Invalid or revoked refresh token")
+      }
+
+      // Check if the specific token has expired
+      const tokenRecord = user.refreshTokens.find((rt) => rt.tokenHash === hashed)
+      if (!tokenRecord || tokenRecord.expiresAt < now) {
+        user.refreshTokens = user.refreshTokens.filter((rt) => rt.tokenHash !== hashed)
+        await user.save()
+        throw new Error("Refresh token expired")
+      }
+
+      // Token rotation: remove used token and push new
+      user.refreshTokens = user.refreshTokens.filter((rt) => rt.tokenHash !== hashed && rt.expiresAt > now)
+      user.refreshTokens.push({
+        tokenHash: newHashedRefresh,
+        expiresAt: newExpiry,
+        createdAt: now,
+      })
+
+      await user.save()
+      const safe = user.toSafeUser()
+      const accessToken = generateAccessToken({
+        userId: safe.id,
+        email: safe.email,
+        role: safe.role,
+      })
+
+      return { user: safe, accessToken, refreshToken: newRawRefresh }
+    } else {
+      let foundUser: InMemoryUser | null = null
+      for (const u of memoryUsers.values()) {
+        const hasToken = u.refreshTokens.some((rt) => rt.tokenHash === hashed)
+        if (hasToken) {
+          foundUser = u
+          break
+        }
+      }
+
+      if (!foundUser) {
+        throw new Error("Invalid or revoked refresh token")
+      }
+
+      const tokenRecord = foundUser.refreshTokens.find((rt) => rt.tokenHash === hashed)
+      if (!tokenRecord || tokenRecord.expiresAt < now) {
+        foundUser.refreshTokens = foundUser.refreshTokens.filter((rt) => rt.tokenHash !== hashed)
+        throw new Error("Refresh token expired")
+      }
+
+      foundUser.refreshTokens = foundUser.refreshTokens.filter(
+        (rt) => rt.tokenHash !== hashed && rt.expiresAt > now
+      )
+      foundUser.refreshTokens.push({
+        tokenHash: newHashedRefresh,
+        expiresAt: newExpiry,
+        createdAt: now,
+      })
+      foundUser.updatedAt = now
+
+      const safe = toSafeMemoryUser(foundUser)
+      const accessToken = generateAccessToken({
+        userId: safe.id,
+        email: safe.email,
+        role: safe.role,
+      })
+
+      return { user: safe, accessToken, refreshToken: newRawRefresh }
+    }
+  }
+
+  /**
+   * Log out: revoke specific refresh token
+   */
+  static async logout(userId: string, rawRefreshToken?: string): Promise<void> {
+    if (!rawRefreshToken) return
+    const hashed = hashRefreshToken(rawRefreshToken)
+
+    if (isDatabaseConnected()) {
+      await User.findByIdAndUpdate(userId, {
+        $pull: { refreshTokens: { tokenHash: hashed } },
+      })
+    } else {
+      const u = memoryUsers.get(userId)
+      if (u) {
+        u.refreshTokens = u.refreshTokens.filter((rt) => rt.tokenHash !== hashed)
+      }
+    }
+  }
+
+  /**
+   * Get user profile by ID
+   */
+  static async getUserById(userId: string): Promise<SafeUserDTO | null> {
+    if (isDatabaseConnected()) {
+      const user = await User.findById(userId)
+      return user ? user.toSafeUser() : null
+    } else {
+      const u = memoryUsers.get(userId)
+      return u ? toSafeMemoryUser(u) : null
+    }
+  }
+
+  /**
+   * Update profile details (Name, Avatar) - Role escalation strictly prohibited!
+   */
+  static async updateProfile(
+    userId: string,
+    updates: { fullName?: string; avatarUrl?: string }
+  ): Promise<SafeUserDTO> {
+    if (isDatabaseConnected()) {
+      const user = await User.findById(userId)
+      if (!user) throw new Error("User not found")
+
+      if (updates.fullName && updates.fullName.trim().length >= 2) {
+        user.fullName = updates.fullName.trim()
+      }
+      if (typeof updates.avatarUrl === "string") {
+        user.avatarUrl = updates.avatarUrl.trim()
+      }
+
+      await user.save()
+      return user.toSafeUser()
+    } else {
+      const u = memoryUsers.get(userId)
+      if (!u) throw new Error("User not found")
+
+      if (updates.fullName && updates.fullName.trim().length >= 2) {
+        u.fullName = updates.fullName.trim()
+      }
+      if (typeof updates.avatarUrl === "string") {
+        u.avatarUrl = updates.avatarUrl.trim()
+      }
+      u.updatedAt = new Date()
+
+      return toSafeMemoryUser(u)
+    }
+  }
+
+  /**
+   * Change password after verifying current password
+   */
+  static async changePassword(
+    userId: string,
+    currentPasswordPlain: string,
+    newPasswordPlain: string
+  ): Promise<void> {
+    const strength = validatePasswordStrength(newPasswordPlain)
+    if (!strength.valid) {
+      throw new Error(strength.errors[0])
+    }
+
+    if (isDatabaseConnected()) {
+      const user = await User.findById(userId).select("+passwordHash +refreshTokens")
+      if (!user) throw new Error("User not found")
+
+      const matches = await comparePassword(currentPasswordPlain, user.passwordHash)
+      if (!matches) {
+        throw new Error("Current password is incorrect")
+      }
+
+      user.passwordHash = await hashPassword(newPasswordPlain)
+      // Revoke all existing sessions on password change for security
+      user.refreshTokens = []
+      await user.save()
+    } else {
+      const u = memoryUsers.get(userId)
+      if (!u) throw new Error("User not found")
+
+      const matches = await comparePassword(currentPasswordPlain, u.passwordHash)
+      if (!matches) {
+        throw new Error("Current password is incorrect")
+      }
+
+      u.passwordHash = await hashPassword(newPasswordPlain)
+      u.refreshTokens = []
+      u.updatedAt = new Date()
+    }
+  }
+
+  /**
+   * Get user preferences
+   */
+  static async getPreferences(userId: string): Promise<IUserPreferences> {
+    const safeUser = await this.getUserById(userId)
+    if (!safeUser) throw new Error("User not found")
+    return safeUser.preferences
+  }
+
+  /**
+   * Update user preferences
+   */
+  static async updatePreferences(
+    userId: string,
+    prefUpdates: Partial<IUserPreferences>
+  ): Promise<IUserPreferences> {
+    if (isDatabaseConnected()) {
+      const user = await User.findById(userId)
+      if (!user) throw new Error("User not found")
+
+      if (typeof prefUpdates.preferredSpeed === "number") {
+        user.preferences.preferredSpeed = prefUpdates.preferredSpeed
+      }
+      if (typeof prefUpdates.preferredSubtitle !== "undefined") {
+        user.preferences.preferredSubtitle = prefUpdates.preferredSubtitle
+      }
+      if (typeof prefUpdates.autoplay === "boolean") {
+        user.preferences.autoplay = prefUpdates.autoplay
+      }
+      if (typeof prefUpdates.preferredTheme === "string") {
+        user.preferences.preferredTheme = prefUpdates.preferredTheme
+      }
+      if (typeof prefUpdates.defaultVolume === "number") {
+        user.preferences.defaultVolume = Math.max(0, Math.min(1, prefUpdates.defaultVolume))
+      }
+
+      await user.save()
+      return user.preferences
+    } else {
+      const u = memoryUsers.get(userId)
+      if (!u) throw new Error("User not found")
+
+      if (typeof prefUpdates.preferredSpeed === "number") {
+        u.preferences.preferredSpeed = prefUpdates.preferredSpeed
+      }
+      if (typeof prefUpdates.preferredSubtitle !== "undefined") {
+        u.preferences.preferredSubtitle = prefUpdates.preferredSubtitle
+      }
+      if (typeof prefUpdates.autoplay === "boolean") {
+        u.preferences.autoplay = prefUpdates.autoplay
+      }
+      if (typeof prefUpdates.preferredTheme === "string") {
+        u.preferences.preferredTheme = prefUpdates.preferredTheme
+      }
+      if (typeof prefUpdates.defaultVolume === "number") {
+        u.preferences.defaultVolume = Math.max(0, Math.min(1, prefUpdates.defaultVolume))
+      }
+      u.updatedAt = new Date()
+
+      return u.preferences
+    }
+  }
+}
