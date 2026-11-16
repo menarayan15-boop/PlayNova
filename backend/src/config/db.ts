@@ -39,6 +39,7 @@ export async function connectDB(): Promise<boolean> {
     console.log(`[Database] Connecting to MongoDB: ${sanitized}`)
 
     const conn = await mongoose.connect(config.mongodbUri, {
+      dbName: "playnova", // Explicitly ensure playnova database is targeted (not defaulting to 'test')
       maxPoolSize: 10,
       minPoolSize: 2,
       serverSelectionTimeoutMS: 5000,
@@ -48,7 +49,7 @@ export async function connectDB(): Promise<boolean> {
     })
 
     isConnected = true
-    console.log(`[Database] MongoDB Atlas connected successfully to host: ${conn.connection.host}`)
+    console.log(`[Database] MongoDB Atlas connected successfully to host: ${conn.connection.host}, database: ${conn.connection.name}`)
     return true
   } catch (error) {
     isConnected = false
@@ -93,10 +94,14 @@ export function getDatabaseStatus(): {
   connected: boolean
   readyState: number
   message: string
+  databaseName?: string
+  host?: string
 } {
   const readyState = mongoose.connection.readyState
   const configured = Boolean(config.mongodbUri)
   const connected = readyState === 1
+  const databaseName = mongoose.connection.name || mongoose.connection.db?.databaseName
+  const host = mongoose.connection.host
 
   let message = "Database unconfigured"
   if (!configured) {
@@ -116,5 +121,7 @@ export function getDatabaseStatus(): {
     connected,
     readyState,
     message,
+    databaseName,
+    host,
   }
 }

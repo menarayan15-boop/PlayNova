@@ -12,6 +12,8 @@ export function getHealth(req: Request, res: Response) {
       connected: dbStatus.connected,
       configured: dbStatus.configured,
       message: dbStatus.message,
+      databaseName: dbStatus.databaseName,
+      host: dbStatus.host,
     },
     timestamp: new Date().toISOString(),
   })

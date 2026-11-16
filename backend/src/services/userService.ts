@@ -1,5 +1,6 @@
 import { User, IUser, SafeUserDTO, IUserPreferences, IRefreshToken } from "../models/User.js"
-import { isDatabaseConnected } from "../config/db.js"
+import { isDatabaseConnected, connectDB } from "../config/db.js"
+import { config } from "../config/env.js"
 import { hashPassword, comparePassword, validatePasswordStrength } from "../utils/password.js"
 import {
   generateAccessToken,
@@ -79,7 +80,14 @@ export class UserService {
       completionThreshold: 90,
     }
 
-    if (isDatabaseConnected()) {
+    if (config.mongodbUri) {
+      if (!isDatabaseConnected()) {
+        const reconnected = await connectDB()
+        if (!reconnected) {
+          throw new Error("Database connection unavailable. Registration could not be saved to MongoDB.")
+        }
+      }
+
       // Check existing in MongoDB
       const existing = await User.findOne({ email: cleanEmail })
       if (existing) {
@@ -102,8 +110,13 @@ export class UserService {
         ],
       })
 
-      await newUser.save()
-      const safe = newUser.toSafeUser()
+      // Await database write to confirm persistence
+      const savedUser = await newUser.save()
+      if (!savedUser || !savedUser._id) {
+        throw new Error("MongoDB write failed. User was not saved.")
+      }
+
+      const safe = savedUser.toSafeUser()
       const accessToken = generateAccessToken({
         userId: safe.id,
         email: safe.email,
@@ -112,43 +125,7 @@ export class UserService {
 
       return { user: safe, accessToken, refreshToken: rawRefreshToken }
     } else {
-      // In-memory fallback
-      for (const u of memoryUsers.values()) {
-        if (u.email === cleanEmail) {
-          throw new Error("An account with this email address already exists")
-        }
-      }
-
-      const id = "mem_" + Date.now().toString(36) + Math.random().toString(36).substring(2, 7)
-      const now = new Date()
-      const inMem: InMemoryUser = {
-        id,
-        fullName: cleanName,
-        email: cleanEmail,
-        passwordHash,
-        role: "user",
-        avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(cleanName)}&backgroundColor=0f3238&textColor=f5f4ee`,
-        preferences: initialPreferences,
-        refreshTokens: [
-          {
-            tokenHash: hashedRefresh,
-            expiresAt: refreshExpiry,
-            createdAt: now,
-          },
-        ],
-        createdAt: now,
-        updatedAt: now,
-      }
-      memoryUsers.set(id, inMem)
-
-      const safe = toSafeMemoryUser(inMem)
-      const accessToken = generateAccessToken({
-        userId: safe.id,
-        email: safe.email,
-        role: safe.role,
-      })
-
-      return { user: safe, accessToken, refreshToken: rawRefreshToken }
+      throw new Error("MONGODB_URI is not configured. Registration requires a live database.")
     }
   }
 
@@ -165,7 +142,14 @@ export class UserService {
     const hashedRefresh = hashRefreshToken(rawRefreshToken)
     const refreshExpiry = getRefreshTokenExpiry()
 
-    if (isDatabaseConnected()) {
+    if (config.mongodbUri) {
+      if (!isDatabaseConnected()) {
+        const reconnected = await connectDB()
+        if (!reconnected) {
+          throw new Error("Database connection unavailable. Please try again.")
+        }
+      }
+
       const user = await User.findOne({ email: cleanEmail }).select("+passwordHash +refreshTokens")
       if (!user) {
         throw new Error("Invalid email or password")
@@ -196,42 +180,7 @@ export class UserService {
 
       return { user: safe, accessToken, refreshToken: rawRefreshToken }
     } else {
-      // In-memory fallback
-      let foundUser: InMemoryUser | null = null
-      for (const u of memoryUsers.values()) {
-        if (u.email === cleanEmail) {
-          foundUser = u
-          break
-        }
-      }
-
-      if (!foundUser) {
-        throw new Error("Invalid email or password")
-      }
-
-      const match = await comparePassword(passwordPlain, foundUser.passwordHash)
-      if (!match) {
-        throw new Error("Invalid email or password")
-      }
-
-      const now = new Date()
-      foundUser.lastLoginAt = now
-      foundUser.refreshTokens = foundUser.refreshTokens.filter((rt) => rt.expiresAt > now)
-      foundUser.refreshTokens.push({
-        tokenHash: hashedRefresh,
-        expiresAt: refreshExpiry,
-        createdAt: now,
-      })
-      foundUser.updatedAt = now
-
-      const safe = toSafeMemoryUser(foundUser)
-      const accessToken = generateAccessToken({
-        userId: safe.id,
-        email: safe.email,
-        role: safe.role,
-      })
-
-      return { user: safe, accessToken, refreshToken: rawRefreshToken }
+      throw new Error("MONGODB_URI is not configured. Login requires a live database.")
     }
   }
 
@@ -251,7 +200,10 @@ export class UserService {
     const newExpiry = getRefreshTokenExpiry()
     const now = new Date()
 
-    if (isDatabaseConnected()) {
+    if (config.mongodbUri) {
+      if (!isDatabaseConnected()) {
+        await connectDB()
+      }
       const user = await User.findOne({
         "refreshTokens.tokenHash": hashed,
       }).select("+refreshTokens")
@@ -333,7 +285,10 @@ export class UserService {
     if (!rawRefreshToken) return
     const hashed = hashRefreshToken(rawRefreshToken)
 
-    if (isDatabaseConnected()) {
+    if (config.mongodbUri) {
+      if (!isDatabaseConnected()) {
+        await connectDB()
+      }
       await User.findByIdAndUpdate(userId, {
         $pull: { refreshTokens: { tokenHash: hashed } },
       })
@@ -349,7 +304,10 @@ export class UserService {
    * Get user profile by ID
    */
   static async getUserById(userId: string): Promise<SafeUserDTO | null> {
-    if (isDatabaseConnected()) {
+    if (config.mongodbUri) {
+      if (!isDatabaseConnected()) {
+        await connectDB()
+      }
       const user = await User.findById(userId)
       return user ? user.toSafeUser() : null
     } else {
@@ -365,7 +323,10 @@ export class UserService {
     userId: string,
     updates: { fullName?: string; avatarUrl?: string }
   ): Promise<SafeUserDTO> {
-    if (isDatabaseConnected()) {
+    if (config.mongodbUri) {
+      if (!isDatabaseConnected()) {
+        await connectDB()
+      }
       const user = await User.findById(userId)
       if (!user) throw new Error("User not found")
 
@@ -407,7 +368,10 @@ export class UserService {
       throw new Error(strength.errors[0])
     }
 
-    if (isDatabaseConnected()) {
+    if (config.mongodbUri) {
+      if (!isDatabaseConnected()) {
+        await connectDB()
+      }
       const user = await User.findById(userId).select("+passwordHash +refreshTokens")
       if (!user) throw new Error("User not found")
 
@@ -451,7 +415,10 @@ export class UserService {
     userId: string,
     prefUpdates: Partial<IUserPreferences>
   ): Promise<IUserPreferences> {
-    if (isDatabaseConnected()) {
+    if (config.mongodbUri) {
+      if (!isDatabaseConnected()) {
+        await connectDB()
+      }
       const user = await User.findById(userId)
       if (!user) throw new Error("User not found")
 
