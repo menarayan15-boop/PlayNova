@@ -74,8 +74,8 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/#features" className="hover:text-[#10292d] transition-colors">
-                  Features
+                <Link href="/#showcase" className="hover:text-[#10292d] transition-colors">
+                  Showcase
                 </Link>
               </li>
               <li>

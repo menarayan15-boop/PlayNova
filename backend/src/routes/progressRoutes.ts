@@ -14,3 +14,4 @@ router.post("/:videoId", ProgressController.upsertProgress)
 router.delete("/:videoId", ProgressController.deleteProgress)
 
 export default router
+

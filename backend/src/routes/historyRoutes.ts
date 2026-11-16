@@ -12,3 +12,4 @@ router.delete("/:videoId", ProgressController.deleteHistoryItem)
 router.delete("/", ProgressController.clearAllHistory)
 
 export default router
+

@@ -162,16 +162,12 @@ export default function HeroSection() {
               </svg>
             </a>
 
-            <a
-              href="#features"
-              onClick={(e) => {
-                e.preventDefault()
-                document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })
-              }}
+            <Link
+              href="/explore"
               className="inline-flex items-center justify-center px-6 py-3 rounded-full text-sm sm:text-base font-medium bg-[#cdc8f6] text-[#1e1a44] hover:bg-[#b8b1f3] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
             >
-              Explore Features
-            </a>
+              Explore Library
+            </Link>
           </div>
         </div>
 

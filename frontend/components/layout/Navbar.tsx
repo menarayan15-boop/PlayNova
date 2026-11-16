@@ -47,7 +47,7 @@ export default function Navbar({ onGetStartedClick }: NavbarProps) {
     : [
         { label: "Home", href: "/" },
         { label: "Explore", href: "/explore" },
-        { label: "Features", href: "/#features" },
+        { label: "Showcase", href: "/#showcase" },
         { label: "About", href: "/#benefits" },
       ]
 
