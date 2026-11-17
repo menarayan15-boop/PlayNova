@@ -5,6 +5,7 @@ export type VideoCategory =
   | "Science"
   | "Space"
   | "Entertainment"
+  | "Documentaries"
 
 export interface SubtitleTrack {
   id: string

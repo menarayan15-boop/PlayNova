@@ -2,6 +2,7 @@ import { createApp } from "./app.js"
 import { config } from "./config/env.js"
 import { connectDB } from "./config/db.js"
 import { logger } from "./utils/logger.js"
+import { VideoService } from "./services/videoService.js"
 
 const app = createApp()
 
@@ -10,6 +11,8 @@ async function startServer() {
   if (config.mongodbUri) {
     logger.info("Attempting connection to MongoDB Atlas...")
     await connectDB()
+    // Ensure initial catalog is seeded in MongoDB Atlas
+    await VideoService.ensureSeedVideos()
   } else {
     logger.warn("MONGODB_URI not configured. API will operate with in-memory sample video metadata.")
   }

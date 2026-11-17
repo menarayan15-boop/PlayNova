@@ -1,12 +1,13 @@
 import mongoose, { Document, Schema } from "mongoose"
 
-export interface IVideo extends Document {
+export interface IVideo extends Document<string> {
+  _id: string
   title: string
   description: string
   videoUrl: string
   thumbnailUrl: string
   duration: number // Duration in seconds
-  category: "Technology" | "Education" | "Nature" | "Science" | "Space" | "Entertainment"
+  category: "Technology" | "Education" | "Nature" | "Science" | "Space" | "Entertainment" | "Documentaries"
   views: number
   featured: boolean
   quality: string[]
@@ -17,6 +18,7 @@ export interface IVideo extends Document {
 
 const VideoSchema: Schema = new Schema(
   {
+    _id: { type: String, required: true },
     title: { type: String, required: true, trim: true },
     description: { type: String, required: true },
     videoUrl: { type: String, required: true },
@@ -25,7 +27,7 @@ const VideoSchema: Schema = new Schema(
     category: {
       type: String,
       required: true,
-      enum: ["Technology", "Education", "Nature", "Science", "Space", "Entertainment"],
+      enum: ["Technology", "Education", "Nature", "Science", "Space", "Entertainment", "Documentaries"],
       default: "Technology",
     },
     views: { type: Number, default: 0 },
@@ -35,8 +37,16 @@ const VideoSchema: Schema = new Schema(
   },
   {
     timestamps: true,
+    _id: false, // Custom string _id support
   }
 )
 
-export const Video = mongoose.model<IVideo>("Video", VideoSchema)
+// Efficient MongoDB Indexes for Search, Categories, and Recommendations
+VideoSchema.index({ title: "text", description: "text", tags: "text" })
+VideoSchema.index({ category: 1 })
+VideoSchema.index({ views: -1 })
+VideoSchema.index({ createdAt: -1 })
+VideoSchema.index({ duration: 1 })
+VideoSchema.index({ featured: 1 })
 
+export const Video = mongoose.model<IVideo>("Video", VideoSchema)

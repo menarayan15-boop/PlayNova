@@ -40,15 +40,15 @@ export default function Navbar({ onGetStartedClick }: NavbarProps) {
     ? [
         { label: "Home", href: "/" },
         { label: "Explore", href: "/explore" },
+        { label: "Watchlist", href: "/watchlist" },
         { label: "History", href: "/history" },
         { label: "Profile", href: "/profile" },
-        { label: "Settings", href: "/settings" },
       ]
     : [
         { label: "Home", href: "/" },
         { label: "Explore", href: "/explore" },
+        { label: "Watchlist", href: "/watchlist" },
         { label: "Showcase", href: "/#showcase" },
-        { label: "About", href: "/#benefits" },
       ]
 
   const handleNavClick = (href: string) => (e: React.MouseEvent) => {

@@ -6,6 +6,7 @@ import VideoPlayer from "./VideoPlayer"
 import VideoPlayerErrorBoundary from "./VideoPlayerErrorBoundary"
 import { VideoItem } from "@/types"
 import { usePlayerStore } from "@/stores/usePlayerStore"
+import { useWatchlistStore } from "@/stores/useWatchlistStore"
 
 interface WatchPageClientProps {
   activeVideo: VideoItem
@@ -17,6 +18,8 @@ export default function WatchPageClient({
   relatedVideos,
 }: WatchPageClientProps) {
   const { isTheaterMode } = usePlayerStore()
+  const { isInWatchlist, toggleWatchlist } = useWatchlistStore()
+  const isSaved = isInWatchlist(activeVideo.id)
 
   const nextVideo = relatedVideos[0]
   const handleNextVideo = () => {
@@ -89,9 +92,32 @@ export default function WatchPageClient({
             {/* Video Metadata & Description */}
             <div className="p-6 sm:p-7 rounded-2xl bg-[#ffffff] border border-[#e2e0d6] shadow-sm flex flex-col gap-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="px-2.5 py-1 rounded-full text-xs font-mono uppercase tracking-wider bg-[#0c2f35] text-[#8c7b33]">
-                  {activeVideo.category}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-full text-xs font-mono uppercase tracking-wider bg-[#0c2f35] text-[#8c7b33]">
+                    {activeVideo.category}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => toggleWatchlist(activeVideo)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                      isSaved
+                        ? "bg-[#8c7b33] border-[#8c7b33] text-white shadow-sm"
+                        : "bg-white border-[#e2e0d6] text-[#10292d] hover:bg-black/5"
+                    }`}
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill={isSaved ? "currentColor" : "none"}
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                    >
+                      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span>{isSaved ? "In Watchlist" : "Save to Watchlist"}</span>
+                  </button>
+                </div>
                 <div className="flex items-center gap-3 text-xs font-mono text-[#66726f]">
                   <span>{activeVideo.views.toLocaleString()} views</span>
                   <span>·</span>

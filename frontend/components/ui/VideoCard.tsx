@@ -1,10 +1,17 @@
-import React from "react"
+"use client"
+
+import React, { useEffect } from "react"
 import Link from "next/link"
 import { VideoItem } from "@/types"
+import { useWatchlistStore } from "@/stores/useWatchlistStore"
 
 interface VideoCardProps {
   video: VideoItem
   onSelect?: (video: VideoItem) => void
+  progressPercentage?: number
+  lastPositionSeconds?: number
+  isCompleted?: boolean
+  showWatchlistButton?: boolean
 }
 
 function formatDuration(seconds: number): string {
@@ -19,7 +26,23 @@ function formatViews(views: number): string {
   return String(views)
 }
 
-export default function VideoCard({ video, onSelect }: VideoCardProps) {
+export default function VideoCard({
+  video,
+  onSelect,
+  progressPercentage,
+  lastPositionSeconds,
+  isCompleted = false,
+  showWatchlistButton = true,
+}: VideoCardProps) {
+  const { isInWatchlist, toggleWatchlist, hasLoaded, fetchWatchlist } = useWatchlistStore()
+  const isSaved = isInWatchlist(video.id)
+
+  useEffect(() => {
+    if (!hasLoaded) {
+      fetchWatchlist()
+    }
+  }, [hasLoaded, fetchWatchlist])
+
   const handleClick = (e: React.MouseEvent) => {
     if (onSelect) {
       e.preventDefault()
@@ -27,9 +50,15 @@ export default function VideoCard({ video, onSelect }: VideoCardProps) {
     }
   }
 
+  const handleToggleWatchlist = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    await toggleWatchlist(video)
+  }
+
   return (
-    <div className="group relative flex flex-col rounded-xl overflow-hidden bg-[#0c2f35] text-[#eef2ec] border border-[#e2e0d6]/20 shadow-[0_10px_30px_-15px_rgba(16,41,45,0.2)] hover:shadow-[0_24px_50px_-20px_rgba(16,41,45,0.45)] hover:-translate-y-1.5 transition-all duration-300">
-      {/* Thumbnail area with duration badge and play hover button */}
+    <div className="group relative flex flex-col rounded-2xl overflow-hidden bg-[#0c2f35] text-[#eef2ec] border border-[#e2e0d6]/20 shadow-[0_10px_30px_-15px_rgba(16,41,45,0.2)] hover:shadow-[0_24px_50px_-20px_rgba(16,41,45,0.45)] hover:-translate-y-1.5 transition-all duration-300">
+      {/* Thumbnail area with duration badge, category pill & watchlist toggle */}
       <div className="relative aspect-video w-full overflow-hidden bg-[#0a181b]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -40,16 +69,62 @@ export default function VideoCard({ video, onSelect }: VideoCardProps) {
         />
 
         {/* Category Pill */}
-        <div className="absolute top-2.5 left-2.5">
+        <div className="absolute top-2.5 left-2.5 z-10">
           <span className="px-2 py-0.5 rounded-full text-[10px] font-mono tracking-wider uppercase bg-[#0c2f35]/90 text-[#8c7b33] border border-[#8c7b33]/40 backdrop-blur-sm">
             {video.category}
           </span>
         </div>
 
-        {/* Duration badge */}
-        <div className="absolute bottom-2.5 right-2.5 px-1.5 py-0.5 rounded bg-black/75 text-[11px] font-mono text-[#eef2ec] border border-white/10 backdrop-blur-sm">
-          {formatDuration(video.duration)}
+        {/* Watchlist Bookmark Button */}
+        {showWatchlistButton && (
+          <button
+            type="button"
+            onClick={handleToggleWatchlist}
+            className={`absolute top-2.5 right-2.5 z-20 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+              isSaved
+                ? "bg-[#8c7b33] text-[#f5f4ee] shadow-md shadow-[#8c7b33]/30 scale-105"
+                : "bg-black/60 text-[#eef2ec]/80 hover:text-white hover:bg-black/85 backdrop-blur-sm"
+            }`}
+            title={isSaved ? "Remove from Watchlist" : "Save to Watchlist"}
+            aria-label={isSaved ? `Remove ${video.title} from watchlist` : `Add ${video.title} to watchlist`}
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill={isSaved ? "currentColor" : "none"}
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+            </svg>
+          </button>
+        )}
+
+        {/* Duration badge or Completed badge */}
+        <div className="absolute bottom-2.5 right-2.5 z-10">
+          {isCompleted ? (
+            <span className="px-1.5 py-0.5 rounded bg-[#8c7b33] text-[10px] font-mono font-semibold text-[#0c2f35] uppercase tracking-wider shadow-sm">
+              Watched
+            </span>
+          ) : (
+            <span className="px-1.5 py-0.5 rounded bg-black/75 text-[11px] font-mono text-[#eef2ec] border border-white/10 backdrop-blur-sm">
+              {formatDuration(video.duration)}
+            </span>
+          )}
         </div>
+
+        {/* Watch Progress Bar */}
+        {progressPercentage !== undefined && progressPercentage > 0 && (
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/60 z-10">
+            <div
+              className="h-full bg-[#8c7b33] transition-all"
+              style={{ width: `${Math.min(100, Math.max(0, progressPercentage))}%` }}
+            />
+          </div>
+        )}
 
         {/* Hover play overlay */}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
@@ -84,7 +159,7 @@ export default function VideoCard({ video, onSelect }: VideoCardProps) {
             onClick={handleClick}
             className="inline-flex items-center gap-1 text-[#8c7b33] hover:text-[#a8963f] font-medium text-xs group-hover:translate-x-0.5 transition-all"
           >
-            Watch Now
+            {lastPositionSeconds && lastPositionSeconds > 0 ? "Resume" : "Watch Now"}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
@@ -94,4 +169,3 @@ export default function VideoCard({ video, onSelect }: VideoCardProps) {
     </div>
   )
 }
-

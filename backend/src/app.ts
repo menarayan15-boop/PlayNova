@@ -7,6 +7,7 @@ import authRoutes from "./routes/authRoutes.js"
 import userRoutes from "./routes/userRoutes.js"
 import progressRoutes from "./routes/progressRoutes.js"
 import historyRoutes from "./routes/historyRoutes.js"
+import watchlistRoutes from "./routes/watchlistRoutes.js"
 import { errorHandler } from "./middleware/errorHandler.js"
 import { config } from "./config/env.js"
 
@@ -47,6 +48,7 @@ export function createApp(): Express {
   app.use("/api/v1/users", userRoutes)
   app.use("/api/v1/progress", progressRoutes)
   app.use("/api/v1/history", historyRoutes)
+  app.use("/api/v1/watchlist", watchlistRoutes)
   app.use("/api/v1", videoRoutes)
 
   // Backward-compatible unversioned route aliases
@@ -54,6 +56,7 @@ export function createApp(): Express {
   app.use("/api/users", userRoutes)
   app.use("/api/progress", progressRoutes)
   app.use("/api/history", historyRoutes)
+  app.use("/api/watchlist", watchlistRoutes)
   app.use("/api", healthRoutes)
   app.use("/api", videoRoutes)
 
