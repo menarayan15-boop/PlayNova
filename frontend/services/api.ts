@@ -1,4 +1,5 @@
 import { VideoItem } from "@/types"
+import { buildApiUrl } from "@/utils/apiConfig"
 
 export const DEFAULT_SAMPLE_VIDEOS: VideoItem[] = [
   {
@@ -105,16 +106,15 @@ export const DEFAULT_SAMPLE_VIDEOS: VideoItem[] = [
   },
 ]
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"
-
 export async function fetchVideos(category?: string): Promise<VideoItem[]> {
   try {
-    const url = new URL(`${API_BASE_URL}/api/videos`)
+    const rawUrl = buildApiUrl("/api/videos")
+    const url = new URL(rawUrl, "http://localhost:5001")
     if (category && category !== "All") {
       url.searchParams.set("category", category)
     }
 
-    const res = await fetch(url.toString(), {
+    const res = await fetch(rawUrl.startsWith("http") ? url.toString() : `${rawUrl}?${url.searchParams.toString()}`, {
       next: { revalidate: 60 },
       headers: { "Content-Type": "application/json" },
     })
@@ -141,7 +141,7 @@ export async function fetchVideos(category?: string): Promise<VideoItem[]> {
 
 export async function fetchVideoById(id: string): Promise<VideoItem | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/videos/${id}`, {
+    const res = await fetch(buildApiUrl(`/api/videos/${id}`), {
       headers: { "Content-Type": "application/json" },
     })
     if (res.ok) {

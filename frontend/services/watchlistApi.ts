@@ -1,6 +1,5 @@
 import { VideoItem } from "@/types"
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"
+import { buildApiUrl } from "@/utils/apiConfig"
 
 export interface WatchlistEntry {
   id: string
@@ -21,12 +20,13 @@ export async function fetchWatchlistApi(): Promise<WatchlistEntry[]> {
     const authHeaders = getAuthHeader()
     if (!authHeaders.Authorization) return []
 
-    const res = await fetch(`${API_BASE_URL}/api/v1/watchlist`, {
+    const res = await fetch(buildApiUrl("/api/v1/watchlist"), {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
         ...authHeaders,
       },
+      credentials: "include",
     })
 
     if (!res.ok) return []
@@ -43,12 +43,13 @@ export async function addToWatchlistApi(videoId: string): Promise<WatchlistEntry
     const authHeaders = getAuthHeader()
     if (!authHeaders.Authorization) return null
 
-    const res = await fetch(`${API_BASE_URL}/api/v1/watchlist`, {
+    const res = await fetch(buildApiUrl("/api/v1/watchlist"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...authHeaders,
       },
+      credentials: "include",
       body: JSON.stringify({ videoId }),
     })
 
@@ -66,12 +67,13 @@ export async function removeFromWatchlistApi(videoId: string): Promise<boolean> 
     const authHeaders = getAuthHeader()
     if (!authHeaders.Authorization) return false
 
-    const res = await fetch(`${API_BASE_URL}/api/v1/watchlist/${videoId}`, {
+    const res = await fetch(buildApiUrl(`/api/v1/watchlist/${videoId}`), {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
         ...authHeaders,
       },
+      credentials: "include",
     })
 
     if (!res.ok) return false
@@ -88,12 +90,13 @@ export async function checkWatchlistApi(videoId: string): Promise<boolean> {
     const authHeaders = getAuthHeader()
     if (!authHeaders.Authorization) return false
 
-    const res = await fetch(`${API_BASE_URL}/api/v1/watchlist/${videoId}/check`, {
+    const res = await fetch(buildApiUrl(`/api/v1/watchlist/${videoId}/check`), {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
         ...authHeaders,
       },
+      credentials: "include",
     })
 
     if (!res.ok) return false
@@ -103,4 +106,3 @@ export async function checkWatchlistApi(videoId: string): Promise<boolean> {
     return false
   }
 }
-

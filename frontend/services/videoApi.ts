@@ -1,6 +1,5 @@
 import { VideoItem, VideoCategory } from "@/types"
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"
+import { buildApiUrl } from "@/utils/apiConfig"
 
 export interface SearchOptions {
   query?: string
@@ -32,7 +31,8 @@ export interface RecommendationOptions {
 }
 
 export async function searchVideosApi(options: SearchOptions): Promise<PaginatedVideosResponse> {
-  const url = new URL(`${API_BASE_URL}/api/v1/videos/search`)
+  const rawUrl = buildApiUrl("/api/v1/videos/search")
+  const url = new URL(rawUrl, "http://localhost:5001")
 
   if (options.query) url.searchParams.set("q", options.query)
   if (options.category && options.category !== "All") url.searchParams.set("category", options.category)
@@ -44,7 +44,8 @@ export async function searchVideosApi(options: SearchOptions): Promise<Paginated
   if (options.limit) url.searchParams.set("limit", String(options.limit))
 
   try {
-    const res = await fetch(url.toString(), {
+    const fetchTarget = rawUrl.startsWith("http") ? url.toString() : `${rawUrl}?${url.searchParams.toString()}`
+    const res = await fetch(fetchTarget, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     })
@@ -69,11 +70,13 @@ export async function getSearchSuggestionsApi(query: string): Promise<SearchSugg
     return { suggestions: [], videos: [] }
   }
 
-  const url = new URL(`${API_BASE_URL}/api/v1/videos/suggestions`)
+  const rawUrl = buildApiUrl("/api/v1/videos/suggestions")
+  const url = new URL(rawUrl, "http://localhost:5001")
   url.searchParams.set("q", query.trim())
 
   try {
-    const res = await fetch(url.toString(), {
+    const fetchTarget = rawUrl.startsWith("http") ? url.toString() : `${rawUrl}?${url.searchParams.toString()}`
+    const res = await fetch(fetchTarget, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     })
@@ -87,7 +90,8 @@ export async function getSearchSuggestionsApi(query: string): Promise<SearchSugg
 }
 
 export async function getRecommendationsApi(options: RecommendationOptions = {}): Promise<VideoItem[]> {
-  const url = new URL(`${API_BASE_URL}/api/v1/videos/recommendations`)
+  const rawUrl = buildApiUrl("/api/v1/videos/recommendations")
+  const url = new URL(rawUrl, "http://localhost:5001")
   if (options.limit) url.searchParams.set("limit", String(options.limit))
 
   const token =
@@ -102,7 +106,8 @@ export async function getRecommendationsApi(options: RecommendationOptions = {})
   }
 
   try {
-    const res = await fetch(url.toString(), {
+    const fetchTarget = rawUrl.startsWith("http") ? url.toString() : `${rawUrl}?${url.searchParams.toString()}`
+    const res = await fetch(fetchTarget, {
       method: "GET",
       headers,
       credentials: "include",
@@ -117,11 +122,13 @@ export async function getRecommendationsApi(options: RecommendationOptions = {})
 }
 
 export async function getTrendingVideosApi(limit: number = 8): Promise<VideoItem[]> {
-  const url = new URL(`${API_BASE_URL}/api/v1/videos/trending`)
+  const rawUrl = buildApiUrl("/api/v1/videos/trending")
+  const url = new URL(rawUrl, "http://localhost:5001")
   url.searchParams.set("limit", String(limit))
 
   try {
-    const res = await fetch(url.toString(), {
+    const fetchTarget = rawUrl.startsWith("http") ? url.toString() : `${rawUrl}?${url.searchParams.toString()}`
+    const res = await fetch(fetchTarget, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     })
@@ -135,11 +142,13 @@ export async function getTrendingVideosApi(limit: number = 8): Promise<VideoItem
 }
 
 export async function getRecentlyAddedVideosApi(limit: number = 8): Promise<VideoItem[]> {
-  const url = new URL(`${API_BASE_URL}/api/v1/videos/recent`)
+  const rawUrl = buildApiUrl("/api/v1/videos/recent")
+  const url = new URL(rawUrl, "http://localhost:5001")
   url.searchParams.set("limit", String(limit))
 
   try {
-    const res = await fetch(url.toString(), {
+    const fetchTarget = rawUrl.startsWith("http") ? url.toString() : `${rawUrl}?${url.searchParams.toString()}`
+    const res = await fetch(fetchTarget, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     })

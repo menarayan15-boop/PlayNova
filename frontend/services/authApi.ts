@@ -1,9 +1,8 @@
 import { User, UserPreferences } from "@/types"
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"
+import { buildApiUrl } from "@/utils/apiConfig"
 
 async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`
+  const url = buildApiUrl(endpoint)
   const headers = new Headers(options.headers || {})
 
   if (!headers.has("Content-Type") && options.body && typeof options.body === "string") {

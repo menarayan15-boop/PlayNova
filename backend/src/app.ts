@@ -23,15 +23,30 @@ export function createApp(): Express {
   })
 
   // CORS configuration
+  const allowedOrigins = config.frontendUrl
+    ? config.frontendUrl.split(",").map((u) => u.trim().replace(/\/$/, ""))
+    : []
+
   app.use(
     cors({
       origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps, curl, postman) or matching frontend
-        if (!origin || origin === config.frontendUrl || config.nodeEnv === "development") {
-          callback(null, true)
-        } else {
-          callback(new Error("Not allowed by CORS"))
+        // Allow requests with no origin (like mobile apps, curl, server-side fetch)
+        if (!origin) {
+          return callback(null, true)
         }
+
+        const normalizedOrigin = origin.replace(/\/$/, "")
+
+        // Check configured frontend URLs or development localhost
+        if (
+          allowedOrigins.includes(normalizedOrigin) ||
+          config.nodeEnv === "development" ||
+          normalizedOrigin.endsWith(".vercel.app")
+        ) {
+          return callback(null, true)
+        }
+
+        callback(new Error(`Origin ${origin} not allowed by CORS`))
       },
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],

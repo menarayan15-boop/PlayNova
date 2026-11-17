@@ -5,11 +5,10 @@ import {
   ProgressUpdatePayload,
 } from "@/types"
 import { OfflineProgressQueue } from "@/utils/offlineQueue"
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"
+import { buildApiUrl } from "@/utils/apiConfig"
 
 async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`
+  const url = buildApiUrl(endpoint)
   const headers = new Headers(options.headers || {})
 
   if (!headers.has("Content-Type") && options.body && typeof options.body === "string") {
@@ -71,7 +70,7 @@ export const progressApi = {
   sendBeaconProgress(videoId: string, payload: ProgressUpdatePayload): boolean {
     if (typeof window === "undefined" || !navigator.sendBeacon) return false
     try {
-      const url = `${API_BASE_URL}/api/v1/progress/${videoId}`
+      const url = buildApiUrl(`/api/v1/progress/${videoId}`)
       const blob = new Blob([JSON.stringify(payload)], { type: "application/json" })
       return navigator.sendBeacon(url, blob)
     } catch {
