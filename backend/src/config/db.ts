@@ -50,6 +50,7 @@ export async function connectDB(): Promise<boolean> {
 
     isConnected = true
     console.log(`[Database] MongoDB Atlas connected successfully to host: ${conn.connection.host}, database: ${conn.connection.name}`)
+    console.log("Active MongoDB database:", conn.connection.name)
     return true
   } catch (error) {
     isConnected = false
