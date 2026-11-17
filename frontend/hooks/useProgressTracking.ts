@@ -88,6 +88,36 @@ export function useProgressTracking({
     [videoId, duration, isTrackingEnabled, user?.id, updateLocalProgress, videoRef]
   )
 
+  const activeVideoIdRef = useRef<string>(videoId)
+  activeVideoIdRef.current = videoId
+
+  /**
+   * Helper to seek safely once video metadata is available
+   */
+  const seekWhenMetadataReady = useCallback(
+    (targetSeconds: number) => {
+      const video = videoRef.current
+      if (!video) return
+
+      const doSeek = () => {
+        const vidDur = video.duration || duration || Infinity
+        const clamped = Math.max(0, Math.min(targetSeconds, vidDur > 2 ? vidDur - 2 : vidDur))
+        onSeek(clamped)
+      }
+
+      if (video.readyState >= 1 && !isNaN(video.duration) && video.duration > 0) {
+        doSeek()
+      } else {
+        const handleMetadata = () => {
+          doSeek()
+          video.removeEventListener("loadedmetadata", handleMetadata)
+        }
+        video.addEventListener("loadedmetadata", handleMetadata, { once: true })
+      }
+    },
+    [videoRef, duration, onSeek]
+  )
+
   /**
    * Initial check for resume position on video load
    */
@@ -109,16 +139,21 @@ export function useProgressTracking({
         }
 
         const progress = await progressApi.getProgress(videoId)
-        if (!isMounted || !progress) return
+        // Guard against unmount or stale responses from previous video requests
+        if (!isMounted || activeVideoIdRef.current !== videoId || !progress) return
 
         updateLocalProgress(videoId, progress)
 
-        // Only offer resume if user watched at least 5 seconds and video is not basically finished (< 95%)
-        if (progress.lastPositionSeconds > 5 && progress.completionPercentage < 95) {
+        // Only offer resume if user watched at least 5 seconds, video is not completed,
+        // and user is not within 5 seconds of the end or >= 90% complete
+        const isNearEnd = progress.durationSeconds > 0 && (progress.durationSeconds - progress.lastPositionSeconds <= 5)
+        const isComplete = Boolean(progress.isCompleted || (progress.completionPercentage >= 90))
+
+        if (progress.lastPositionSeconds > 5 && !isComplete && !isNearEnd) {
           const pref = user?.preferences?.resumePreference || "ask"
 
           if (pref === "auto") {
-            onSeek(progress.lastPositionSeconds)
+            seekWhenMetadataReady(progress.lastPositionSeconds)
           } else if (pref === "ask") {
             setResumeData({
               lastPositionSeconds: progress.lastPositionSeconds,
@@ -138,7 +173,7 @@ export function useProgressTracking({
     return () => {
       isMounted = false
     }
-  }, [videoId, isTrackingEnabled, user?.id, updateLocalProgress, onSeek, user?.preferences?.resumePreference])
+  }, [videoId, isTrackingEnabled, user?.id, updateLocalProgress, seekWhenMetadataReady, user?.preferences?.resumePreference])
 
   /**
    * Track interval start and stop on playback state changes

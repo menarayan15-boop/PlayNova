@@ -39,6 +39,7 @@ export default function WatchPageClient({
                 poster={activeVideo.thumbnailUrl}
                 subtitles={activeVideo.subtitles}
                 thumbnails={activeVideo.previewThumbnails}
+                nextVideo={nextVideo}
                 onNextVideo={handleNextVideo}
                 autoPlay={false}
               />
@@ -77,6 +78,7 @@ export default function WatchPageClient({
                     poster={activeVideo.thumbnailUrl}
                     subtitles={activeVideo.subtitles}
                     thumbnails={activeVideo.previewThumbnails}
+                    nextVideo={nextVideo}
                     onNextVideo={handleNextVideo}
                     autoPlay={false}
                   />

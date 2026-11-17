@@ -105,7 +105,7 @@ export const DEFAULT_SAMPLE_VIDEOS: VideoItem[] = [
   },
 ]
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"
 
 export async function fetchVideos(category?: string): Promise<VideoItem[]> {
   try {

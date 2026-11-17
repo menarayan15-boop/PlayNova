@@ -17,7 +17,7 @@ const SHORTCUTS = [
   { key: "T", action: "Toggle theater mode" },
   { key: "P", action: "Toggle Picture-in-Picture mode" },
   { key: "C", action: "Toggle subtitles on / off" },
-  { key: "+ / -", action: "Increase / decrease playback speed" },
+  { key: "> / <", action: "Increase / decrease playback speed" },
   { key: "N", action: "Play next video (if available)" },
   { key: "?", action: "Show or hide this keyboard help" },
 ]

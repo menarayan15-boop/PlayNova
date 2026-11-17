@@ -46,10 +46,13 @@ function toWatchProgressDTO(p: any): WatchProgressDTO {
     furthestPositionSeconds: p.furthestPositionSeconds || 0,
     watchedIntervals: p.watchedIntervals || [],
     completionPercentage: p.completionPercentage || 0,
+    watchedPercentage: p.completionPercentage || 0,
     isCompleted: Boolean(p.isCompleted),
+    completed: Boolean(p.isCompleted),
     firstWatchedAt: p.firstWatchedAt instanceof Date ? p.firstWatchedAt.toISOString() : p.firstWatchedAt,
     lastWatchedAt: p.lastWatchedAt instanceof Date ? p.lastWatchedAt.toISOString() : p.lastWatchedAt,
     completedAt: p.completedAt instanceof Date ? p.completedAt.toISOString() : p.completedAt ? String(p.completedAt) : null,
+    updatedAt: p.updatedAt instanceof Date ? p.updatedAt.toISOString() : p.updatedAt ? String(p.updatedAt) : new Date().toISOString(),
     version: p.version || 1,
   }
 }

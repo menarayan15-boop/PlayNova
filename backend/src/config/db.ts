@@ -1,5 +1,13 @@
 import mongoose from "mongoose"
+import dns from "dns"
 import { config } from "./env.js"
+
+// Set public DNS resolvers to prevent Windows ESERVFAIL on MongoDB SRV records
+try {
+  dns.setServers(["8.8.8.8", "1.1.1.1"])
+} catch {
+  // Ignore in environments where custom DNS servers cannot be set
+}
 
 let isConnected = false
 

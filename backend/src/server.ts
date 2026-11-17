@@ -14,7 +14,7 @@ async function startServer() {
     logger.warn("MONGODB_URI not configured. API will operate with in-memory sample video metadata.")
   }
 
-  const server = app.listen(config.port, () => {
+  const server = app.listen(config.port, "0.0.0.0", () => {
     logger.info(`PlayNova Backend API running on port ${config.port} in ${config.nodeEnv} mode`)
     logger.info(`Health check available at http://localhost:${config.port}/api/health`)
   })

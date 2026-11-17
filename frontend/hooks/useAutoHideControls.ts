@@ -7,6 +7,7 @@ interface AutoHideOptions {
   isScrubbing: boolean
   isSettingsOpen: boolean
   isShortcutsOpen: boolean
+  isFocusWithin?: boolean
   hideDelayMs?: number
 }
 
@@ -15,6 +16,7 @@ export function useAutoHideControls({
   isScrubbing,
   isSettingsOpen,
   isShortcutsOpen,
+  isFocusWithin = false,
   hideDelayMs = 3000,
 }: AutoHideOptions) {
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -31,24 +33,24 @@ export function useAutoHideControls({
     setControlsVisible(true)
     clearTimer()
 
-    // Only auto-hide if playing and no interactive menu or scrubbing is active
-    if (isPlaying && !isScrubbing && !isSettingsOpen && !isShortcutsOpen) {
+    // Only auto-hide if playing and no interactive menu, scrubbing, or keyboard focus is active
+    if (isPlaying && !isScrubbing && !isSettingsOpen && !isShortcutsOpen && !isFocusWithin) {
       timerRef.current = setTimeout(() => {
         setControlsVisible(false)
       }, hideDelayMs)
     }
-  }, [isPlaying, isScrubbing, isSettingsOpen, isShortcutsOpen, hideDelayMs, clearTimer])
+  }, [isPlaying, isScrubbing, isSettingsOpen, isShortcutsOpen, isFocusWithin, hideDelayMs, clearTimer])
 
-  // When paused, scrubbing, or a modal/menu is open, always keep controls visible
+  // When paused, scrubbing, focus within, or a modal/menu is open, always keep controls visible
   useEffect(() => {
-    if (!isPlaying || isScrubbing || isSettingsOpen || isShortcutsOpen) {
+    if (!isPlaying || isScrubbing || isSettingsOpen || isShortcutsOpen || isFocusWithin) {
       clearTimer()
       setControlsVisible(true)
     } else {
       showControlsTemporarily()
     }
     return () => clearTimer()
-  }, [isPlaying, isScrubbing, isSettingsOpen, isShortcutsOpen, clearTimer, showControlsTemporarily])
+  }, [isPlaying, isScrubbing, isSettingsOpen, isShortcutsOpen, isFocusWithin, clearTimer, showControlsTemporarily])
 
   return {
     controlsVisible,

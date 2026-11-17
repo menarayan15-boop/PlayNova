@@ -26,10 +26,13 @@ export interface WatchProgressDTO {
   furthestPositionSeconds: number
   watchedIntervals: [number, number][]
   completionPercentage: number
+  watchedPercentage?: number // Phase 5 alias
   isCompleted: boolean
+  completed?: boolean // Phase 5 alias
   firstWatchedAt: string
   lastWatchedAt: string
   completedAt: string | null
+  updatedAt?: string // Phase 5 field
   version: number
 }
 
@@ -91,8 +94,19 @@ const WatchProgressSchema = new Schema<IWatchProgress>(
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 )
+
+// Phase 5 virtual aliases for watchedPercentage and completed
+WatchProgressSchema.virtual("watchedPercentage").get(function () {
+  return this.completionPercentage
+})
+
+WatchProgressSchema.virtual("completed").get(function () {
+  return this.isCompleted
+})
 
 // Ensure compound unique index so a user has at most one record per video
 WatchProgressSchema.index({ userId: 1, videoId: 1 }, { unique: true })

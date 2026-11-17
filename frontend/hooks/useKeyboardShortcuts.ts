@@ -112,6 +112,20 @@ export function useKeyboardShortcuts({
           onToggleSubtitles()
           break
 
+        case "Period": // '>' key with shift, or '.'
+          if (e.shiftKey || e.key === ">") {
+            e.preventDefault()
+            onCycleSpeed("up")
+          }
+          break
+
+        case "Comma": // '<' key with shift, or '<'
+          if (e.shiftKey || e.key === "<") {
+            e.preventDefault()
+            onCycleSpeed("down")
+          }
+          break
+
         case "Equal": // '+' or '='
           if (e.key === "+" || e.key === "=") {
             e.preventDefault()

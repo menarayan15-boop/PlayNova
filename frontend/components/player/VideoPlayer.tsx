@@ -2,10 +2,11 @@
 
 import React, { useRef, useState, useEffect, useCallback } from "react"
 import { usePlayerStore } from "@/stores/usePlayerStore"
-import { SubtitleTrack, ThumbnailPreview, PlaybackSpeed } from "@/types"
+import { SubtitleTrack, ThumbnailPreview, PlaybackSpeed, VideoItem } from "@/types"
 import PlayerControls from "./PlayerControls"
 import LoadingIndicator from "./LoadingIndicator"
 import KeyboardShortcutsHelp from "./KeyboardShortcutsHelp"
+import AutoplayCountdown from "./AutoplayCountdown"
 import { usePlaybackCoordinator } from "@/hooks/usePlaybackCoordinator"
 import { useAutoHideControls } from "@/hooks/useAutoHideControls"
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts"
@@ -21,6 +22,7 @@ interface VideoPlayerProps {
   subtitles?: SubtitleTrack[]
   thumbnails?: ThumbnailPreview[]
   className?: string
+  nextVideo?: VideoItem | null
   onTimeUpdate?: (currentTime: number, duration: number) => void
   onEnded?: () => void
   onNextVideo?: () => void
@@ -40,6 +42,7 @@ export default function VideoPlayer({
   subtitles = DEFAULT_SUBTITLES,
   thumbnails,
   className = "",
+  nextVideo,
   onTimeUpdate,
   onEnded,
   onNextVideo,
@@ -48,6 +51,13 @@ export default function VideoPlayer({
   const containerRef = useRef<HTMLDivElement>(null)
   const [isScrubbing, setIsScrubbing] = useState(false)
   const [hasInteracted, setHasInteracted] = useState(false)
+  const [isFocusWithin, setIsFocusWithin] = useState(false)
+  const [isAutoplayCancelled, setIsAutoplayCancelled] = useState(false)
+
+  // Reset cancellation on new video source
+  useEffect(() => {
+    setIsAutoplayCancelled(false)
+  }, [src])
 
   const {
     isPlaying,
@@ -103,12 +113,13 @@ export default function VideoPlayer({
     }
   })
 
-  // 2. Auto-hide controls
+  // 2. Auto-hide controls (keeps visible when paused, scrubbing, menu open, or focused)
   const { controlsVisible, showControlsTemporarily } = useAutoHideControls({
     isPlaying,
     isScrubbing,
     isSettingsOpen,
     isShortcutsOpen,
+    isFocusWithin,
     hideDelayMs: 3000,
   })
 
@@ -537,6 +548,14 @@ export default function VideoPlayer({
         tabIndex={0}
         onMouseMove={showControlsTemporarily}
         onPointerDown={showControlsTemporarily}
+        onTouchStart={showControlsTemporarily}
+        onTouchMove={showControlsTemporarily}
+        onFocus={() => setIsFocusWithin(true)}
+        onBlur={(e) => {
+          if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+            setIsFocusWithin(false)
+          }
+        }}
         className={`relative bg-[#0a181b] rounded-2xl overflow-hidden border border-white/10 select-none group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8c7b33] transition-all duration-500 ${theaterModeStyles} ${className}`}
       >
         {/* HTML5 Video Element with native WebVTT text tracks */}
@@ -643,6 +662,19 @@ export default function VideoPlayer({
             onDismiss={dismissResumePrompt}
             onResume={handleResume}
             onStartOver={handleStartOver}
+          />
+        )}
+
+        {/* Autoplay Next Video Countdown (Phase 5 Feature 8) */}
+        {isEnded && nextVideo && onNextVideo && !isAutoplayCancelled && (
+          <AutoplayCountdown
+            nextVideo={nextVideo}
+            onPlayNow={() => {
+              onNextVideo()
+            }}
+            onCancel={() => {
+              setIsAutoplayCancelled(true)
+            }}
           />
         )}
 

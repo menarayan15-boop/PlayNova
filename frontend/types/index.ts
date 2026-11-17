@@ -92,10 +92,13 @@ export interface WatchProgressDTO {
   furthestPositionSeconds: number
   watchedIntervals: [number, number][]
   completionPercentage: number
+  watchedPercentage?: number
   isCompleted: boolean
+  completed?: boolean
   firstWatchedAt: string
   lastWatchedAt: string
   completedAt: string | null
+  updatedAt?: string
   version: number
 }
 
