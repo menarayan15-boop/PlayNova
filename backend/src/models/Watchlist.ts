@@ -31,3 +31,4 @@ WatchlistSchema.index({ userId: 1, videoId: 1 }, { unique: true })
 WatchlistSchema.index({ userId: 1, addedAt: -1 })
 
 export const Watchlist = mongoose.model<IWatchlist>("Watchlist", WatchlistSchema)
+
