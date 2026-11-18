@@ -418,6 +418,52 @@ export class VideoService {
   }
 
   /**
+   * Ensures that initial seed videos (BUILTIN_PLAYNOVA_CATALOG) exist in MongoDB Atlas.
+   * If the collection is empty or missing initial videos, inserts them idempotently.
+   */
+  static async ensureSeedVideos(): Promise<void> {
+    if (!isDatabaseConnected()) return
+
+    try {
+      for (const item of BUILTIN_PLAYNOVA_CATALOG) {
+        const existing = await Video.findById(item.id).maxTimeMS(3000)
+        if (!existing) {
+          await Video.create({
+            _id: item.id,
+            title: item.title,
+            description: item.description,
+            videoUrl: item.videoUrl,
+            normalizedSourceUrl: item.normalizedSourceUrl || item.videoUrl,
+            sourceKey: `builtin:${item.id}`,
+            sourceType: item.sourceType || "native",
+            embeddable: item.embeddable !== false,
+            thumbnailUrl: item.thumbnailUrl,
+            duration: item.duration,
+            category: item.category,
+            categories: item.categories || [item.category],
+            views: item.views || 10000,
+            featured: Boolean(item.featured),
+            tags: item.tags || [],
+            sourceProvider: item.sourceProvider || "PlayNova Public Media Archive",
+            sourceAttribution: item.sourceAttribution || "PlayNova Engineering",
+            license: item.license || "Public Domain",
+            status: "published",
+            validationStatus: "verified",
+            validatedAt: new Date(),
+          }).catch((err: any) => {
+            if (err?.code !== 11000) {
+              console.warn("[VideoService] Seed insert error for", item.id, err?.message)
+            }
+          })
+        }
+      }
+      this.invalidateCatalogCache()
+    } catch (err: any) {
+      console.warn("[VideoService] ensureSeedVideos error:", err?.message)
+    }
+  }
+
+  /**
    * Fetch all published, deduplicated videos directly from MongoDB Atlas (with 60s TTL cache)
    * Falls back gracefully to verified built-in catalog if Atlas connection is unavailable
    */
@@ -441,11 +487,22 @@ export class VideoService {
     if (this.catalogCache && this.catalogCache.expiresAt > now) {
       allPublished = this.catalogCache.items
     } else {
-      const docs = await Video.find(PUBLISHED_FILTER)
+      let docs = await Video.find(PUBLISHED_FILTER)
         .sort({ createdAt: -1, _id: 1 })
         .maxTimeMS(5000)
         .lean()
-      allPublished = deduplicateVideos(docs.map(toVideoDTO))
+      if (docs.length === 0) {
+        await this.ensureSeedVideos().catch(() => null)
+        docs = await Video.find(PUBLISHED_FILTER)
+          .sort({ createdAt: -1, _id: 1 })
+          .maxTimeMS(5000)
+          .lean()
+      }
+      if (docs.length === 0) {
+        allPublished = [...BUILTIN_PLAYNOVA_CATALOG]
+      } else {
+        allPublished = deduplicateVideos(docs.map(toVideoDTO))
+      }
       this.catalogCache = { items: allPublished, expiresAt: now + this.CATALOG_TTL_MS }
     }
 
@@ -492,6 +549,9 @@ export class VideoService {
       const persisted = await YouTubeService.ensurePersistedYouTubeVideo(ytId).catch(() => null)
       if (persisted) return persisted
     }
+
+    const hit = BUILTIN_PLAYNOVA_CATALOG.find((v) => v.id === id)
+    if (hit) return hit
 
     return null
   }

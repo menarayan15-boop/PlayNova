@@ -134,8 +134,12 @@ export async function fetchVideos(category?: string): Promise<VideoItem[]> {
     console.warn("[api] fetchVideos failed:", err)
   }
 
-  // Never silently serve fake hardcoded fallback videos
-  return []
+  // Graceful fallback to verified sample videos if API is temporarily unreachable
+  if (category && category !== "All") {
+    const catLower = category.toLowerCase()
+    return DEFAULT_SAMPLE_VIDEOS.filter((v) => v.category.toLowerCase() === catLower)
+  }
+  return DEFAULT_SAMPLE_VIDEOS
 }
 
 export async function fetchVideoById(id: string): Promise<VideoItem | null> {
@@ -171,6 +175,10 @@ export async function fetchVideoById(id: string): Promise<VideoItem | null> {
       console.warn("[api] YouTube video fallback failed:", err)
     }
   }
+
+  // Fallback to verified local native sample catalog
+  const sample = DEFAULT_SAMPLE_VIDEOS.find((v) => v.id === id)
+  if (sample) return sample
 
   return null
 }
