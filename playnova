@@ -1,0 +1,14 @@
+# PlayNova — Video Discovery & Streaming Platform
+
+PlayNova is a modern, high-performance video discovery and streaming platform built with Next.js, React, TypeScript, Node.js, Express, MongoDB Atlas, and YouTube Data API v3.
+
+## Features
+- **Fluid Video Streaming**: Dual-engine playback supporting native HTML5 media and authorized official YouTube embedded streams.
+- **Custom PlayNova UI**: Editorial cream, deep teal, and olive gold aesthetic with consistent PlayNova branding across all discovery sections and video cards.
+- **AI-Powered & Dynamic Personalization**: Multi-shelf recommendations, category diversity, and session-rotation without jumpy re-renders.
+- **Watch History & Watchlist**: Synchronized playback progress, Resume at timestamp, and user-curated named watchlist collections.
+- **Vertical Short Videos**: Responsive vertical short-form video feed with single-stream focus and smooth navigation.
+- **Security & Privacy**: NoSQL injection protection, CSRF origin verification, brute-force rate-limiting, and privacy-aware analytics.
+- **Accessibility & Responsiveness**: Keyboard shortcuts, WebVTT subtitle track engine, high contrast controls, and mobile responsive design.
+
+Created for: https://github.com/menarayan15-boop/PlayNova

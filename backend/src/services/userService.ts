@@ -1,4 +1,7 @@
 import { User, IUser, SafeUserDTO, IUserPreferences, IRefreshToken } from "../models/User.js"
+import { WatchProgress } from "../models/WatchProgress.js"
+import { Watchlist } from "../models/Watchlist.js"
+import { Notification } from "../models/Notification.js"
 import { isDatabaseConnected, connectDB } from "../config/db.js"
 import { config } from "../config/env.js"
 import { hashPassword, comparePassword, validatePasswordStrength } from "../utils/password.js"
@@ -446,6 +449,27 @@ export class UserService {
       if (typeof prefUpdates.completionThreshold === "number") {
         user.preferences.completionThreshold = Math.max(50, Math.min(100, prefUpdates.completionThreshold))
       }
+      if (prefUpdates.notificationPreferences && typeof prefUpdates.notificationPreferences === "object") {
+        const cur = user.preferences.notificationPreferences || {
+          recommendations: true,
+          newReleases: true,
+          systemUpdates: true,
+        }
+        user.preferences.notificationPreferences = {
+          recommendations:
+            typeof prefUpdates.notificationPreferences.recommendations === "boolean"
+              ? prefUpdates.notificationPreferences.recommendations
+              : cur.recommendations,
+          newReleases:
+            typeof prefUpdates.notificationPreferences.newReleases === "boolean"
+              ? prefUpdates.notificationPreferences.newReleases
+              : cur.newReleases,
+          systemUpdates:
+            typeof prefUpdates.notificationPreferences.systemUpdates === "boolean"
+              ? prefUpdates.notificationPreferences.systemUpdates
+              : cur.systemUpdates,
+        }
+      }
 
       await user.save()
       return user.preferences
@@ -481,6 +505,122 @@ export class UserService {
 
       return u.preferences
     }
+  }
+
+  /**
+   * List active (non-expired) sessions for the authenticated user without exposing token hashes
+   */
+  static async getActiveSessions(
+    userId: string,
+    currentRawRefreshToken?: string
+  ): Promise<{ id: string; createdAt: string; expiresAt: string; device: string; isCurrent: boolean }[]> {
+    if (!config.mongodbUri) return []
+    if (!isDatabaseConnected()) {
+      await connectDB()
+    }
+
+    const user = await User.findById(userId).select("+refreshTokens").maxTimeMS(4000)
+    if (!user) throw new Error("User not found")
+
+    const now = new Date()
+    const currentHash = currentRawRefreshToken ? hashRefreshToken(currentRawRefreshToken) : null
+
+    const active = (user.refreshTokens || []).filter((rt) => rt.expiresAt > now)
+    return active.map((rt, idx) => ({
+      id: `session_${idx + 1}_${rt.tokenHash.slice(0, 8)}`,
+      createdAt: rt.createdAt.toISOString(),
+      expiresAt: rt.expiresAt.toISOString(),
+      device: rt.userAgent || "Web Browser Session",
+      isCurrent: Boolean(currentHash && rt.tokenHash === currentHash),
+    }))
+  }
+
+  /**
+   * Revoke all active refresh token sessions across all devices
+   */
+  static async revokeAllSessions(userId: string): Promise<number> {
+    if (!config.mongodbUri) return 0
+    if (!isDatabaseConnected()) {
+      await connectDB()
+    }
+
+    const user = await User.findById(userId).select("+refreshTokens").maxTimeMS(4000)
+    if (!user) throw new Error("User not found")
+
+    const count = (user.refreshTokens || []).length
+    user.refreshTokens = []
+    await user.save()
+    return count
+  }
+
+  /**
+   * Export all user-owned account data (profile, preferences, watch progress, watchlist, notifications)
+   * Strictly omits passwordHash and refreshTokens.
+   */
+  static async exportAccountData(userId: string) {
+    if (!isDatabaseConnected()) {
+      await connectDB()
+    }
+
+    const user = await User.findById(userId).maxTimeMS(5000)
+    if (!user) throw new Error("User not found")
+
+    const [watchProgress, watchlist, notifications] = await Promise.all([
+      WatchProgress.find({ userId }).maxTimeMS(5000).lean(),
+      Watchlist.find({ userId }).maxTimeMS(5000).lean(),
+      Notification.find({ userId }).maxTimeMS(5000).lean(),
+    ])
+
+    return {
+      exportedAt: new Date().toISOString(),
+      platform: "PlayNova",
+      account: user.toSafeUser(),
+      watchHistory: watchProgress.map((p) => ({
+        videoId: p.videoId,
+        lastPositionSeconds: p.lastPositionSeconds,
+        durationSeconds: p.durationSeconds,
+        completionPercentage: p.completionPercentage,
+        isCompleted: p.isCompleted,
+        lastWatchedAt: p.lastWatchedAt,
+      })),
+      watchlist: watchlist.map((w) => ({
+        videoId: w.videoId,
+        collectionName: w.collectionName || "Watch Later",
+        addedAt: w.addedAt,
+      })),
+      notifications: notifications.map((n) => ({
+        title: n.title,
+        message: n.message,
+        type: n.type,
+        read: n.read,
+        createdAt: n.createdAt,
+      })),
+    }
+  }
+
+  /**
+   * Permanently delete authenticated user's account and associated personal data
+   * Requires password re-authentication.
+   */
+  static async deleteAccount(userId: string, currentPasswordPlain: string): Promise<void> {
+    if (!isDatabaseConnected()) {
+      await connectDB()
+    }
+
+    const user = await User.findById(userId).select("+passwordHash").maxTimeMS(5000)
+    if (!user) throw new Error("User not found")
+
+    const matches = await comparePassword(currentPasswordPlain, user.passwordHash)
+    if (!matches) {
+      throw new Error("Incorrect password. Account deletion cancelled.")
+    }
+
+    await Promise.all([
+      WatchProgress.deleteMany({ userId }),
+      Watchlist.deleteMany({ userId }),
+      Notification.deleteMany({ userId }),
+      User.findByIdAndDelete(userId),
+    ])
   }
 }
 

@@ -102,5 +102,40 @@ export const authApi = {
     )
     return res.data.preferences
   },
+
+  async getSessions(): Promise<
+    { id: string; createdAt: string; expiresAt: string; device: string; isCurrent: boolean }[]
+  > {
+    const res = await apiFetch<{
+      status: string
+      data: { sessions: { id: string; createdAt: string; expiresAt: string; device: string; isCurrent: boolean }[] }
+    }>("/api/v1/users/me/sessions", {
+      method: "GET",
+    })
+    return res.data.sessions || []
+  },
+
+  async revokeAllSessions(): Promise<{ revokedCount: number }> {
+    const res = await apiFetch<{ status: string; data: { revokedCount: number } }>(
+      "/api/v1/users/me/sessions/revoke-all",
+      { method: "POST" }
+    )
+    return res.data
+  },
+
+  async exportAccountData(): Promise<Record<string, unknown>> {
+    const res = await apiFetch<{ status: string; data: Record<string, unknown> }>(
+      "/api/v1/users/me/export",
+      { method: "GET" }
+    )
+    return res.data
+  },
+
+  async deleteAccount(currentPassword: string, confirmation: string): Promise<void> {
+    await apiFetch<{ status: string; message: string }>("/api/v1/users/me/delete", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, confirmation }),
+    })
+  },
 }
 

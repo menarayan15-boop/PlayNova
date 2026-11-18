@@ -168,8 +168,24 @@ export default function ProfilePage() {
                 href="/settings"
                 className="px-4 py-2 rounded-full text-xs font-semibold bg-white/10 hover:bg-white/20 border border-white/10 text-white text-center transition-all"
               >
-                Playback Settings
+                Playback &amp; Privacy
               </Link>
+              {user.role === "admin" && (
+                <>
+                  <Link
+                    href="/admin/videos"
+                    className="px-4 py-2 rounded-full text-xs font-semibold bg-[#cdc8f6]/20 hover:bg-[#cdc8f6]/30 border border-[#cdc8f6]/40 text-[#cdc8f6] text-center transition-all"
+                  >
+                    Manage Catalog
+                  </Link>
+                  <Link
+                    href="/admin/analytics"
+                    className="px-4 py-2 rounded-full text-xs font-semibold bg-[#cdc8f6]/20 hover:bg-[#cdc8f6]/30 border border-[#cdc8f6]/40 text-[#cdc8f6] text-center transition-all"
+                  >
+                    Admin Analytics
+                  </Link>
+                </>
+              )}
               <button
                 type="button"
                 onClick={handleLogout}

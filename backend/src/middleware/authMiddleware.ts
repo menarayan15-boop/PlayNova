@@ -1,5 +1,8 @@
 import { Request, Response, NextFunction } from "express"
-import { verifyAccessToken, AccessTokenPayload } from "../utils/token.js"
+import { verifyAccessToken } from "../utils/token.js"
+import { User } from "../models/User.js"
+import { isDatabaseConnected } from "../config/db.js"
+import { recordAuthFailure } from "../utils/metrics.js"
 
 export function extractToken(req: Request): string | null {
   // 1. Check HttpOnly cookie
@@ -20,6 +23,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   const token = extractToken(req)
 
   if (!token) {
+    recordAuthFailure()
     res.status(401).json({
       status: "error",
       message: "Authentication required. Please sign in to access this resource.",
@@ -29,6 +33,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 
   const payload = verifyAccessToken(token)
   if (!payload) {
+    recordAuthFailure()
     res.status(401).json({
       status: "error",
       message: "Session expired or invalid token. Please sign in again.",
@@ -52,13 +57,36 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
 }
 
 export function requireRole(role: "user" | "admin") {
-  return (req: Request, res: Response, next: NextFunction): void => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!req.user) {
+      recordAuthFailure()
       res.status(401).json({
         status: "error",
         message: "Authentication required",
       })
       return
+    }
+
+    // For admin endpoints, verify live role from MongoDB so revoked admins cannot use old JWTs
+    if (role === "admin" && isDatabaseConnected()) {
+      try {
+        const dbUser = await User.findById(req.user.userId).select("role").maxTimeMS(4000).lean()
+        if (!dbUser || dbUser.role !== "admin") {
+          res.status(403).json({
+            status: "error",
+            message: "Access forbidden: administrator privileges required.",
+          })
+          return
+        }
+        next()
+        return
+      } catch {
+        res.status(500).json({
+          status: "error",
+          message: "Unable to verify authorization permissions.",
+        })
+        return
+      }
     }
 
     if (req.user.role !== role) {
@@ -73,3 +101,4 @@ export function requireRole(role: "user" | "admin") {
   }
 }
 
+export const requireAdmin = requireRole("admin")

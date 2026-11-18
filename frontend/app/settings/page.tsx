@@ -2,15 +2,18 @@
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useAuthStore } from "@/stores/useAuthStore"
 import { usePlayerStore } from "@/stores/usePlayerStore"
 import { useProgressStore } from "@/stores/useProgressStore"
+import { authApi } from "@/services/authApi"
 import { PlaybackSpeed } from "@/types"
 
 const SPEED_OPTIONS: PlaybackSpeed[] = [0.5, 1, 1.25, 1.5, 2]
 
 export default function SettingsPage() {
-  const { user, isAuthenticated, isInitialized, updatePreferences } = useAuthStore()
+  const router = useRouter()
+  const { user, isAuthenticated, updatePreferences, logout } = useAuthStore()
   const { setPlaybackSpeed, setVolume, setActiveSubtitleTrack } = usePlayerStore()
   const { clearAllHistory } = useProgressStore()
 
@@ -24,6 +27,21 @@ export default function SettingsPage() {
   const [historyTrackingEnabled, setHistoryTrackingEnabled] = useState(true)
   const [resumePreference, setResumePreference] = useState<"ask" | "auto" | "start_over">("ask")
   const [completionThreshold, setCompletionThreshold] = useState<number>(90)
+
+  // Phase 10 Notification & Account Privacy State
+  const [notifRecs, setNotifRecs] = useState(true)
+  const [notifReleases, setNotifReleases] = useState(true)
+  const [notifSystem, setNotifSystem] = useState(true)
+  const [sessions, setSessions] = useState<
+    { id: string; createdAt: string; expiresAt: string; device: string; isCurrent: boolean }[]
+  >([])
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [accountActionStatus, setAccountActionStatus] = useState<string | null>(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deletePassword, setDeletePassword] = useState("")
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -41,6 +59,10 @@ export default function SettingsPage() {
       setHistoryTrackingEnabled(user.preferences.historyTrackingEnabled !== false)
       setResumePreference(user.preferences.resumePreference || "ask")
       setCompletionThreshold(user.preferences.completionThreshold || 90)
+      const np = user.preferences.notificationPreferences
+      setNotifRecs(np?.recommendations !== false)
+      setNotifReleases(np?.newReleases !== false)
+      setNotifSystem(np?.systemUpdates !== false)
     } else if (typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem("playnova_guest_preferences")
@@ -61,6 +83,30 @@ export default function SettingsPage() {
     }
   }, [isAuthenticated, user])
 
+  // Load active sessions when authenticated
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setSessions([])
+      return
+    }
+    let mounted = true
+    setSessionsLoading(true)
+    authApi
+      .getSessions()
+      .then((list) => {
+        if (mounted) setSessions(list)
+      })
+      .catch(() => {
+        if (mounted) setSessions([])
+      })
+      .finally(() => {
+        if (mounted) setSessionsLoading(false)
+      })
+    return () => {
+      mounted = false
+    }
+  }, [isAuthenticated])
+
   const handleSave = async () => {
     setIsSaving(true)
     setSaveStatus(null)
@@ -74,6 +120,11 @@ export default function SettingsPage() {
       historyTrackingEnabled,
       resumePreference,
       completionThreshold,
+      notificationPreferences: {
+        recommendations: notifRecs,
+        newReleases: notifReleases,
+        systemUpdates: notifSystem,
+      },
     }
 
     try {
@@ -94,6 +145,61 @@ export default function SettingsPage() {
       setSaveStatus(err instanceof Error ? err.message : "Failed to save preferences")
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleRevokeAllSessions = async () => {
+    try {
+      await authApi.revokeAllSessions()
+      await logout()
+      router.push("/login")
+    } catch (err) {
+      setAccountActionStatus(err instanceof Error ? err.message : "Failed to sign out of all sessions")
+    }
+  }
+
+  const handleExportAccountData = async () => {
+    try {
+      setAccountActionStatus(null)
+      const exported = await authApi.exportAccountData()
+      const blob = new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `playnova-account-export-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      setAccountActionStatus("Account data exported successfully!")
+      setTimeout(() => setAccountActionStatus(null), 3500)
+    } catch (err) {
+      setAccountActionStatus(err instanceof Error ? err.message : "Failed to export account data")
+    }
+  }
+
+  const handleDeleteAccount = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setDeleteError(null)
+    if (!deletePassword) {
+      setDeleteError("Please enter your current password.")
+      return
+    }
+    if (deleteConfirmText !== "DELETE") {
+      setDeleteError('Please type "DELETE" to confirm.')
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      await authApi.deleteAccount(deletePassword, deleteConfirmText)
+      await logout()
+      setShowDeleteModal(false)
+      router.push("/")
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Account deletion failed")
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -326,10 +432,11 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {[
                   { label: "English", value: "en" },
                   { label: "Español", value: "es" },
+                  { label: "Français", value: "fr" },
                   { label: "Off", value: null },
                 ].map((item) => (
                   <button
@@ -405,9 +512,131 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Card 5: Clear Watch History Danger Zone */}
+          {/* Phase 10: Notification Preferences */}
           {isAuthenticated && (
-            <div className="bg-rose-50/50 rounded-3xl p-6 sm:p-7 border border-rose-200/80">
+            <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-sm border border-[#e2e0d6] flex flex-col gap-4">
+              <div>
+                <h3 className="text-base font-semibold text-[#10292d]">Notification Preferences</h3>
+                <p className="text-xs text-[#66726f] mt-0.5">
+                  Choose which alerts appear in your PlayNova notification bell.
+                </p>
+              </div>
+              {[
+                {
+                  label: "Personalized Recommendations",
+                  desc: "Alerts when new videos match your favorite categories.",
+                  checked: notifRecs,
+                  toggle: () => setNotifRecs((v) => !v),
+                },
+                {
+                  label: "New Catalog Releases",
+                  desc: "Updates when featured documentaries or streams arrive.",
+                  checked: notifReleases,
+                  toggle: () => setNotifReleases((v) => !v),
+                },
+                {
+                  label: "System & Security Notices",
+                  desc: "Important account and playback reliability notifications.",
+                  checked: notifSystem,
+                  toggle: () => setNotifSystem((v) => !v),
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className="flex items-center justify-between gap-4 pt-3 border-t border-[#e2e0d6]/60 first:border-t-0 first:pt-0"
+                >
+                  <div>
+                    <p className="text-xs sm:text-sm font-medium text-[#10292d]">{item.label}</p>
+                    <p className="text-[11px] text-[#66726f]">{item.desc}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={item.toggle}
+                    role="switch"
+                    aria-checked={item.checked}
+                    aria-label={item.label}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
+                      item.checked ? "bg-[#0f3238]" : "bg-gray-300"
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${
+                        item.checked ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Phase 10: Active Sessions & Data Export */}
+          {isAuthenticated && (
+            <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-sm border border-[#e2e0d6] flex flex-col gap-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold text-[#10292d]">Active Sessions &amp; Data Privacy</h3>
+                  <p className="text-xs text-[#66726f] mt-0.5">
+                    Review active signed-in sessions, revoke all devices, or export a portable JSON copy of your account data.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleExportAccountData}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#f5f4ee] text-[#10292d] border border-[#e2e0d6] hover:border-[#8c7b33] transition-all"
+                  >
+                    Export My Data (JSON)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRevokeAllSessions}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0f3238] text-white hover:bg-[#10292d] transition-all"
+                  >
+                    Sign Out All Devices
+                  </button>
+                </div>
+              </div>
+
+              {accountActionStatus && (
+                <div className="p-3 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  {accountActionStatus}
+                </div>
+              )}
+
+              <div className="divide-y divide-[#e2e0d6]/70 border border-[#e2e0d6] rounded-2xl overflow-hidden">
+                {sessionsLoading ? (
+                  <div className="p-4 text-xs text-[#66726f]">Loading active sessions...</div>
+                ) : sessions.length === 0 ? (
+                  <div className="p-4 text-xs text-[#66726f]">No active persistent sessions found.</div>
+                ) : (
+                  sessions.map((s) => (
+                    <div key={s.id} className="p-3.5 flex items-center justify-between gap-3 bg-[#fbfaf6]">
+                      <div>
+                        <p className="text-xs font-semibold text-[#10292d] flex items-center gap-2">
+                          <span>{s.device}</span>
+                          {s.isCurrent && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800">
+                              Current Session
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[11px] text-[#66726f]">
+                          Signed in {new Date(s.createdAt).toLocaleString()} · Expires{" "}
+                          {new Date(s.expiresAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Card 5: Clear Watch History & Account Deletion Danger Zone */}
+          {isAuthenticated && (
+            <div className="bg-rose-50/50 rounded-3xl p-6 sm:p-7 border border-rose-200/80 flex flex-col gap-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <h3 className="text-base font-semibold text-rose-900">Clear Watch History</h3>
@@ -431,6 +660,27 @@ export default function SettingsPage() {
                     Clear History
                   </button>
                 </div>
+              </div>
+
+              <div className="pt-5 border-t border-rose-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-semibold text-rose-900">Delete Account</h3>
+                  <p className="text-xs text-rose-700/80 mt-0.5">
+                    Permanently delete your PlayNova account, watchlist, preferences, and watch history. Requires password verification.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteError(null)
+                    setDeletePassword("")
+                    setDeleteConfirmText("")
+                    setShowDeleteModal(true)
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-white text-rose-700 border border-rose-300 hover:bg-rose-100 transition-all shrink-0"
+                >
+                  Delete Account
+                </button>
               </div>
             </div>
           )}
@@ -460,6 +710,80 @@ export default function SettingsPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {/* Delete Account Re-Authentication Modal */}
+      {showDeleteModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-account-title"
+        >
+          <form
+            onSubmit={handleDeleteAccount}
+            className="max-w-md w-full p-6 rounded-2xl bg-[#0c2f35] text-[#f5f4ee] border border-white/10 shadow-2xl flex flex-col gap-4"
+          >
+            <h3 id="delete-account-title" className="text-lg font-bold text-white">
+              Permanently delete your account?
+            </h3>
+            <p className="text-xs sm:text-sm text-[#93aaa6] leading-relaxed">
+              This action cannot be undone. All your watch progress, saved collections, preferences, and notifications will be permanently removed.
+            </p>
+
+            {deleteError && (
+              <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-400/40 text-xs text-rose-200">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="delete-password" className="text-xs font-medium text-[#eef2ec]">
+                Current Password
+              </label>
+              <input
+                id="delete-password"
+                type="password"
+                required
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                placeholder="Enter your password"
+                className="px-3.5 py-2 rounded-xl bg-white/10 border border-white/15 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[#8c7b33]"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="delete-confirm" className="text-xs font-medium text-[#eef2ec]">
+                Type <span className="font-mono text-rose-300">DELETE</span> to confirm
+              </label>
+              <input
+                id="delete-confirm"
+                type="text"
+                required
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                className="px-3.5 py-2 rounded-xl bg-white/10 border border-white/15 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-rose-400"
+              />
+            </div>
+
+            <div className="flex items-center gap-3 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-white/10 text-white hover:bg-white/15 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 transition-all"
+              >
+                {isDeleting ? "Deleting..." : "Confirm Deletion"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

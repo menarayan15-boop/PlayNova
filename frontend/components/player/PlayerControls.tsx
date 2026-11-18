@@ -30,6 +30,7 @@ interface PlayerControlsProps {
   isSettingsOpen: boolean
   thumbnails?: ThumbnailPreview[]
   onTogglePlay: () => void
+  onStop?: () => void
   onSeek: (time: number) => void
   onSeekRelative: (seconds: number) => void
   onVolumeChange: (vol: number) => void
@@ -80,6 +81,7 @@ export default function PlayerControls({
   isSettingsOpen,
   thumbnails,
   onTogglePlay,
+  onStop,
   onSeek,
   onSeekRelative,
   onVolumeChange,
@@ -104,7 +106,8 @@ export default function PlayerControls({
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className="absolute inset-x-0 bottom-0 px-4 py-3 bg-gradient-to-t from-black/90 via-black/50 to-transparent transition-opacity duration-300 z-20 flex flex-col gap-2 select-none"
+      onDoubleClick={(e) => e.stopPropagation()}
+      className="absolute inset-x-0 bottom-0 px-3 sm:px-4 pt-6 pb-3 bg-gradient-to-t from-black/95 via-black/65 to-transparent transition-opacity duration-300 z-20 flex flex-col gap-2 select-none"
     >
       {/* Interactive Timeline with Scrubbing and Thumbnail Previews */}
       <VideoTimeline
@@ -118,14 +121,31 @@ export default function PlayerControls({
       />
 
       {/* Control Buttons Row */}
-      <div className="flex items-center justify-between text-[#eef2ec] text-sm">
-        {/* Left Controls: Play, Seek -10/+10, Volume, Time Display */}
-        <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center justify-between text-[#eef2ec] text-sm gap-1">
+        {/* Left Controls: Play/Pause, Stop, Seek -10/+10, Volume, Time Display */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
           <PlayPauseButton
             isPlaying={isPlaying}
             isEnded={isEnded}
             onClick={onTogglePlay}
           />
+
+          {onStop && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onStop()
+              }}
+              aria-label="Stop video"
+              title="Stop & Reset"
+              className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/15 active:scale-95 text-[#eef2ec]/85 hover:text-[#eef2ec] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8c7b33]"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="5" y="5" width="14" height="14" rx="2" />
+              </svg>
+            </button>
+          )}
 
           {/* Seek backward 10s */}
           <button

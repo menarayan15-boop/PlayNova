@@ -108,19 +108,22 @@ export const DEFAULT_SAMPLE_VIDEOS: VideoItem[] = [
 
 export async function fetchVideos(category?: string): Promise<VideoItem[]> {
   try {
-    const rawUrl = buildApiUrl("/api/videos")
+    const rawUrl = buildApiUrl("/api/v1/videos")
     const url = new URL(rawUrl, "http://localhost:5001")
     if (category && category !== "All") {
       url.searchParams.set("category", category)
     }
 
-    const res = await fetch(rawUrl.startsWith("http") ? url.toString() : `${rawUrl}?${url.searchParams.toString()}`, {
-      next: { revalidate: 60 },
-      headers: { "Content-Type": "application/json" },
-    })
+    const res = await fetch(
+      rawUrl.startsWith("http") ? url.toString() : `${rawUrl}${url.searchParams.toString() ? `?${url.searchParams.toString()}` : ""}`,
+      {
+        next: { revalidate: 60 },
+        headers: { "Content-Type": "application/json" },
+      }
+    )
 
     if (!res.ok) {
-      throw new Error(`API responded with status: ${res.status}`)
+      return []
     }
 
     const data = await res.json()
@@ -128,21 +131,18 @@ export async function fetchVideos(category?: string): Promise<VideoItem[]> {
       return data.data
     }
   } catch (err) {
-    // Fallback to local sample videos
+    console.warn("[api] fetchVideos failed:", err)
   }
 
-  if (category && category !== "All") {
-    return DEFAULT_SAMPLE_VIDEOS.filter(
-      (v) => v.category.toLowerCase() === category.toLowerCase()
-    )
-  }
-  return DEFAULT_SAMPLE_VIDEOS
+  // Never silently serve fake hardcoded fallback videos
+  return []
 }
 
 export async function fetchVideoById(id: string): Promise<VideoItem | null> {
   try {
-    const res = await fetch(buildApiUrl(`/api/videos/${id}`), {
+    const res = await fetch(buildApiUrl(`/api/v1/videos/${id}`), {
       headers: { "Content-Type": "application/json" },
+      cache: "no-store",
     })
     if (res.ok) {
       const data = await res.json()
@@ -151,9 +151,26 @@ export async function fetchVideoById(id: string): Promise<VideoItem | null> {
       }
     }
   } catch (err) {
-    // Ignore and fallback
+    console.warn("[api] fetchVideoById failed:", err)
   }
 
-  const local = DEFAULT_SAMPLE_VIDEOS.find((v) => v.id === id)
-  return local || null
+  // Fallback for YouTube video IDs via dedicated YouTube endpoint when DB is temporarily unavailable
+  if (id.startsWith("yt_")) {
+    try {
+      const ytRes = await fetch(buildApiUrl(`/api/v1/youtube/video/${encodeURIComponent(id)}`), {
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      })
+      if (ytRes.ok) {
+        const data = await ytRes.json()
+        if (data.status === "success" && data.data) {
+          return data.data
+        }
+      }
+    } catch (err) {
+      console.warn("[api] YouTube video fallback failed:", err)
+    }
+  }
+
+  return null
 }

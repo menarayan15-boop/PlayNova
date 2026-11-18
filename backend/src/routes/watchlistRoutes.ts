@@ -4,6 +4,7 @@ import { requireAuth, optionalAuth } from "../middleware/authMiddleware.js"
 
 const router = Router()
 
+router.get("/collections", requireAuth, WatchlistController.getCollections)
 router.get("/check/:videoId", optionalAuth, WatchlistController.checkWatchlist)
 router.get("/:videoId/check", optionalAuth, WatchlistController.checkWatchlist)
 router.get("/", requireAuth, WatchlistController.getWatchlist)

@@ -8,17 +8,38 @@ import userRoutes from "./routes/userRoutes.js"
 import progressRoutes from "./routes/progressRoutes.js"
 import historyRoutes from "./routes/historyRoutes.js"
 import watchlistRoutes from "./routes/watchlistRoutes.js"
+import notificationRoutes from "./routes/notificationRoutes.js"
+import analyticsRoutes from "./routes/analyticsRoutes.js"
+import adminVideoRoutes from "./routes/adminVideoRoutes.js"
+import youtubeRoutes from "./routes/youtubeRoutes.js"
 import { errorHandler } from "./middleware/errorHandler.js"
+import { apiGeneralLimiter } from "./middleware/rateLimiter.js"
+import {
+  noSqlSanitizer,
+  csrfOriginGuard,
+  requestObservabilityMiddleware,
+} from "./middleware/securityMiddleware.js"
 import { config } from "./config/env.js"
 
 export function createApp(): Express {
   const app = express()
+
+  // Hide Express fingerprint
+  app.disable("x-powered-by")
+
+  // Request latency & observability tracking
+  app.use(requestObservabilityMiddleware)
 
   // Security Headers
   app.use((_req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff")
     res.setHeader("X-Frame-Options", "SAMEORIGIN")
     res.setHeader("X-XSS-Protection", "1; mode=block")
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin")
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if (config.nodeEnv === "production") {
+      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    }
     next()
   })
 
@@ -54,9 +75,15 @@ export function createApp(): Express {
     })
   )
 
-  app.use(express.json())
-  app.use(express.urlencoded({ extended: true }))
+  // Bounded body parsing & cookies
+  app.use(express.json({ limit: "100kb" }))
+  app.use(express.urlencoded({ extended: true, limit: "100kb" }))
   app.use(cookieParser(config.cookieSecret))
+
+  // Global rate limiting, NoSQL injection sanitization & CSRF origin verification
+  app.use("/api", apiGeneralLimiter)
+  app.use(noSqlSanitizer)
+  app.use(csrfOriginGuard)
 
   // Versioned v1 Routes
   app.use("/api/v1/auth", authRoutes)
@@ -64,6 +91,11 @@ export function createApp(): Express {
   app.use("/api/v1/progress", progressRoutes)
   app.use("/api/v1/history", historyRoutes)
   app.use("/api/v1/watchlist", watchlistRoutes)
+  app.use("/api/v1/notifications", notificationRoutes)
+  app.use("/api/v1/analytics", analyticsRoutes)
+  app.use("/api/v1/admin/videos", adminVideoRoutes)
+  app.use("/api/v1/youtube", youtubeRoutes)
+  app.use("/api/v1", healthRoutes)
   app.use("/api/v1", videoRoutes)
 
   // Backward-compatible unversioned route aliases
@@ -72,6 +104,10 @@ export function createApp(): Express {
   app.use("/api/progress", progressRoutes)
   app.use("/api/history", historyRoutes)
   app.use("/api/watchlist", watchlistRoutes)
+  app.use("/api/notifications", notificationRoutes)
+  app.use("/api/analytics", analyticsRoutes)
+  app.use("/api/admin/videos", adminVideoRoutes)
+  app.use("/api/youtube", youtubeRoutes)
   app.use("/api", healthRoutes)
   app.use("/api", videoRoutes)
 

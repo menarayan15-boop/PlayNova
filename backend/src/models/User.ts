@@ -1,5 +1,11 @@
 import mongoose, { Document, Schema } from "mongoose"
 
+export interface INotificationPreferences {
+  recommendations: boolean
+  newReleases: boolean
+  systemUpdates: boolean
+}
+
 export interface IUserPreferences {
   preferredSpeed: number
   preferredSubtitle: string | null
@@ -9,12 +15,14 @@ export interface IUserPreferences {
   historyTrackingEnabled: boolean
   resumePreference: "ask" | "auto" | "start_over"
   completionThreshold: number
+  notificationPreferences?: INotificationPreferences
 }
 
 export interface IRefreshToken {
   tokenHash: string
   expiresAt: Date
   createdAt: Date
+  userAgent?: string
 }
 
 export interface IUser extends Document {
@@ -53,6 +61,19 @@ const PreferencesSchema = new Schema<IUserPreferences>(
     historyTrackingEnabled: { type: Boolean, default: true },
     resumePreference: { type: String, enum: ["ask", "auto", "start_over"], default: "ask" },
     completionThreshold: { type: Number, default: 90, min: 50, max: 100 },
+    notificationPreferences: {
+      type: {
+        recommendations: { type: Boolean, default: true },
+        newReleases: { type: Boolean, default: true },
+        systemUpdates: { type: Boolean, default: true },
+      },
+      default: () => ({
+        recommendations: true,
+        newReleases: true,
+        systemUpdates: true,
+      }),
+      _id: false,
+    },
   },
   { _id: false }
 )
@@ -62,6 +83,7 @@ const RefreshTokenSchema = new Schema<IRefreshToken>(
     tokenHash: { type: String, required: true },
     expiresAt: { type: Date, required: true },
     createdAt: { type: Date, default: Date.now },
+    userAgent: { type: String, maxlength: 160, default: "Web Session" },
   },
   { _id: false }
 )

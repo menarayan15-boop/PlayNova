@@ -1,6 +1,11 @@
 import { Request, Response } from "express"
 import { UserService } from "../services/userService.js"
 import { setAuthCookies, clearAuthCookies } from "../utils/cookies.js"
+import {
+  checkLoginLockout,
+  recordFailedLogin,
+  clearFailedLogin,
+} from "../middleware/securityMiddleware.js"
 
 export class AuthController {
   /**
@@ -10,7 +15,14 @@ export class AuthController {
     try {
       const { fullName, email, password } = req.body
 
-      if (!fullName || !email || !password) {
+      if (
+        typeof fullName !== "string" ||
+        typeof email !== "string" ||
+        typeof password !== "string" ||
+        !fullName.trim() ||
+        !email.trim() ||
+        !password
+      ) {
         res.status(400).json({
           status: "error",
           message: "Full name, email address, and password are required",
@@ -44,19 +56,31 @@ export class AuthController {
    * POST /api/v1/auth/login
    */
   static async login(req: Request, res: Response): Promise<void> {
+    const clientIp = req.ip || req.socket.remoteAddress || "unknown"
+    const { email, password } = req.body || {}
+
+    if (typeof email !== "string" || typeof password !== "string" || !email.trim() || !password) {
+      res.status(400).json({
+        status: "error",
+        message: "Email and password are required",
+      })
+      return
+    }
+
+    const lockout = checkLoginLockout(email, clientIp)
+    if (lockout.locked) {
+      res.setHeader("Retry-After", String(lockout.retryAfterSeconds))
+      res.status(429).json({
+        status: "error",
+        message: `Too many failed sign-in attempts. Please try again in ${Math.ceil(lockout.retryAfterSeconds / 60)} minute(s).`,
+      })
+      return
+    }
+
     try {
-      const { email, password } = req.body
-
-      if (!email || !password) {
-        res.status(400).json({
-          status: "error",
-          message: "Email and password are required",
-        })
-        return
-      }
-
       const { user, accessToken, refreshToken } = await UserService.login(email, password)
 
+      clearFailedLogin(email, clientIp)
       setAuthCookies(res, accessToken, refreshToken)
 
       res.status(200).json({
@@ -67,6 +91,7 @@ export class AuthController {
         },
       })
     } catch (error) {
+      recordFailedLogin(email, clientIp)
       const message = error instanceof Error ? error.message : "Authentication failed"
       res.status(401).json({
         status: "error",

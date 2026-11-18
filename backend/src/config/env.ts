@@ -12,6 +12,9 @@ export interface AppConfig {
   cookieSecret: string
   jwtAccessExpiration: string
   jwtRefreshExpiration: string
+  youtubeApiKey: string
+  youtubeRegionCode: string
+  youtubeDailyQuotaLimit: number
 }
 
 export function validateConfig(): AppConfig {
@@ -25,6 +28,10 @@ export function validateConfig(): AppConfig {
   const cookieSecret = process.env.COOKIE_SECRET || "playnova_dev_cookie_signing_secret_super_key_789"
   const jwtAccessExpiration = process.env.JWT_ACCESS_EXPIRATION || "15m"
   const jwtRefreshExpiration = process.env.JWT_REFRESH_EXPIRATION || "7d"
+
+  const youtubeApiKey = (process.env.YOUTUBE_API_KEY || "").trim()
+  const youtubeRegionCode = (process.env.YOUTUBE_REGION_CODE || "US").trim().toUpperCase()
+  const youtubeDailyQuotaLimit = parseInt(process.env.YOUTUBE_DAILY_QUOTA_LIMIT || "10000", 10)
 
   if (!process.env.MONGODB_URI) {
     console.warn("[Config Warning] MONGODB_URI is not set. Running in unconfigured database mode.")
@@ -40,6 +47,9 @@ export function validateConfig(): AppConfig {
     cookieSecret,
     jwtAccessExpiration,
     jwtRefreshExpiration,
+    youtubeApiKey,
+    youtubeRegionCode,
+    youtubeDailyQuotaLimit,
   }
 }
 

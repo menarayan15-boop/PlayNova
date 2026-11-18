@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import PlayNovaLogo from "../ui/PlayNovaLogo"
+import NotificationBell from "../notifications/NotificationBell"
 import { useAuthStore } from "@/stores/useAuthStore"
 
 interface NavbarProps {
@@ -40,6 +41,7 @@ export default function Navbar({ onGetStartedClick }: NavbarProps) {
     ? [
         { label: "Home", href: "/" },
         { label: "Explore", href: "/explore" },
+        { label: "Shorts", href: "/shorts" },
         { label: "Watchlist", href: "/watchlist" },
         { label: "History", href: "/history" },
         { label: "Profile", href: "/profile" },
@@ -47,8 +49,8 @@ export default function Navbar({ onGetStartedClick }: NavbarProps) {
     : [
         { label: "Home", href: "/" },
         { label: "Explore", href: "/explore" },
+        { label: "Shorts", href: "/shorts" },
         { label: "Watchlist", href: "/watchlist" },
-        { label: "Showcase", href: "/#showcase" },
       ]
 
   const handleNavClick = (href: string) => (e: React.MouseEvent) => {
@@ -108,7 +110,8 @@ export default function Navbar({ onGetStartedClick }: NavbarProps) {
         {/* Desktop Action Buttons / User Menu */}
         <div className="hidden sm:flex items-center gap-3">
           {isAuthenticated && user ? (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <NotificationBell />
               <Link
                 href="/profile"
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[#e2e0d6] hover:border-[#8c7b33]/40 shadow-sm transition-all text-xs font-medium text-[#10292d]"
@@ -154,27 +157,32 @@ export default function Navbar({ onGetStartedClick }: NavbarProps) {
           )}
         </div>
 
-        {/* Mobile Hamburger Button */}
-        <button
-          type="button"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-          aria-expanded={mobileMenuOpen}
-          className="md:hidden p-2 rounded-lg text-[#10292d] hover:bg-black/5 focus:outline-none"
-        >
-          {mobileMenuOpen ? (
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          ) : (
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="4" y1="7" x2="20" y2="7" />
-              <line x1="4" y1="12" x2="20" y2="12" />
-              <line x1="4" y1="17" x2="20" y2="17" />
-            </svg>
-          )}
-        </button>
+        {/* Mobile Actions: Notification Bell & Hamburger */}
+        <div className="flex items-center gap-1 md:hidden">
+          <div className="sm:hidden">
+            <NotificationBell />
+          </div>
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileMenuOpen}
+            className="p-2 rounded-lg text-[#10292d] hover:bg-black/5 focus:outline-none"
+          >
+            {mobileMenuOpen ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="4" y1="7" x2="20" y2="7" />
+                <line x1="4" y1="12" x2="20" y2="12" />
+                <line x1="4" y1="17" x2="20" y2="17" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Drawer Menu */}

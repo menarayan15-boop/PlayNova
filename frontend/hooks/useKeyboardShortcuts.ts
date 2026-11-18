@@ -54,8 +54,19 @@ export function useKeyboardShortcuts({
 
       switch (e.code) {
         case "Space":
+          // If a non-play control button (e.g. Mute, Fullscreen, Settings) is focused,
+          // let native button activation handle Space instead of toggling Play/Pause.
+          if (target && target.tagName === "BUTTON" && target.getAttribute("data-play-toggle") !== "true") {
+            return
+          }
+          e.preventDefault()
+          e.stopPropagation()
+          onTogglePlay()
+          break
+
         case "KeyK":
           e.preventDefault()
+          e.stopPropagation()
           onTogglePlay()
           break
 

@@ -28,9 +28,17 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen flex flex-col bg-[#f5f4ee] text-[#10292d]">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-full focus:bg-[#0f3238] focus:text-white focus:text-xs focus:font-semibold focus:shadow-lg"
+        >
+          Skip to main content
+        </a>
         <AuthProvider>
           <Navbar />
-          <main className="flex-1">{children}</main>
+          <main id="main-content" className="flex-1 outline-none" tabIndex={-1}>
+            {children}
+          </main>
           <Footer />
         </AuthProvider>
       </body>

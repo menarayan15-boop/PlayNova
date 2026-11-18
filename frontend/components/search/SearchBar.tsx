@@ -14,6 +14,8 @@ interface SearchBarProps {
   className?: string
 }
 
+const RECENT_SEARCHES_KEY = "playnova_recent_searches"
+
 export default function SearchBar({
   initialQuery = "",
   placeholder = "Search titles, categories, tags, or topics...",
@@ -26,6 +28,8 @@ export default function SearchBar({
   const [query, setQuery] = useState(initialQuery)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [videoMatches, setVideoMatches] = useState<VideoItem[]>([])
+  const [recentSearches, setRecentSearches] = useState<string[]>([])
+  const [showRecent, setShowRecent] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState<number>(-1)
   const [isLoading, setIsLoading] = useState(false)
@@ -33,6 +37,54 @@ export default function SearchBar({
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(RECENT_SEARCHES_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed)) setRecentSearches(parsed.slice(0, 5))
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [])
+
+  const saveRecentSearch = (term: string) => {
+    const clean = term.trim()
+    if (!clean) return
+    setRecentSearches((prev) => {
+      const next = [clean, ...prev.filter((item) => item.toLowerCase() !== clean.toLowerCase())].slice(0, 5)
+      try {
+        localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next))
+      } catch {
+        // ignore
+      }
+      return next
+    })
+  }
+
+  const removeRecentSearch = (term: string) => {
+    setRecentSearches((prev) => {
+      const next = prev.filter((item) => item !== term)
+      try {
+        localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next))
+      } catch {
+        // ignore
+      }
+      return next
+    })
+  }
+
+  const clearRecentSearches = () => {
+    setRecentSearches([])
+    setShowRecent(false)
+    try {
+      localStorage.removeItem(RECENT_SEARCHES_KEY)
+    } catch {
+      // ignore
+    }
+  }
 
   useEffect(() => {
     setQuery(initialQuery)
@@ -79,6 +131,7 @@ export default function SearchBar({
     function handleClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false)
+        setShowRecent(false)
         setActiveIndex(-1)
       }
     }
@@ -90,7 +143,9 @@ export default function SearchBar({
 
   const handleSubmit = (targetQuery?: string) => {
     const q = (targetQuery !== undefined ? targetQuery : query).trim()
+    if (q) saveRecentSearch(q)
     setIsOpen(false)
+    setShowRecent(false)
     setActiveIndex(-1)
     if (onSearch) {
       onSearch(q)
@@ -170,9 +225,19 @@ export default function SearchBar({
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            const val = e.target.value
+            setQuery(val)
+            if (!val.trim() && recentSearches.length > 0) {
+              setShowRecent(true)
+            } else {
+              setShowRecent(false)
+            }
+          }}
           onFocus={() => {
-            if ((suggestions.length > 0 || videoMatches.length > 0) && query.trim()) {
+            if (!query.trim() && recentSearches.length > 0) {
+              setShowRecent(true)
+            } else if ((suggestions.length > 0 || videoMatches.length > 0) && query.trim()) {
               setIsOpen(true)
             }
           }}
@@ -213,6 +278,69 @@ export default function SearchBar({
           </button>
         </div>
       </div>
+
+      {/* Recent Searches Dropdown (when focused & query is empty) */}
+      {showRecent && !query.trim() && recentSearches.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white/95 backdrop-blur-xl border border-[#e2e0d6] rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="p-2">
+            <div className="flex items-center justify-between px-3 py-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[#8c7b33]">
+                Recent Searches
+              </span>
+              <button
+                type="button"
+                onClick={clearRecentSearches}
+                className="text-[11px] font-medium text-[#66726f] hover:text-red-700 transition-colors"
+              >
+                Clear History
+              </button>
+            </div>
+            {recentSearches.map((term) => (
+              <div
+                key={term}
+                className="flex items-center justify-between px-3 py-2 rounded-xl hover:bg-black/5 transition-colors group"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery(term)
+                    handleSubmit(term)
+                  }}
+                  className="flex-1 flex items-center gap-2.5 text-left text-xs sm:text-sm text-[#10292d] truncate"
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="text-[#66726f] flex-shrink-0"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <span className="truncate">{term}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeRecentSearch(term)
+                  }}
+                  aria-label={`Remove ${term} from recent searches`}
+                  className="p-1 text-[#99a2a0] hover:text-[#10292d] opacity-70 group-hover:opacity-100"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Autocomplete Suggestions Dropdown */}
       {isOpen && (

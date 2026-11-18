@@ -1,11 +1,45 @@
 export type VideoCategory =
+  | "Gaming"
+  | "Music"
+  | "Movies and Trailers"
+  | "Entertainment"
+  | "Comedy"
   | "Technology"
-  | "Education"
-  | "Nature"
+  | "AI and Programming"
   | "Science"
   | "Space"
-  | "Entertainment"
+  | "Nature"
+  | "Travel and Vlogs"
+  | "Food and Cooking"
+  | "Fitness"
+  | "Sports"
+  | "Podcasts"
+  | "Education"
+  | "News"
   | "Documentaries"
+  | "Short Videos"
+
+export const ALL_VIDEO_CATEGORIES: VideoCategory[] = [
+  "Gaming",
+  "Music",
+  "Movies and Trailers",
+  "Entertainment",
+  "Comedy",
+  "Technology",
+  "AI and Programming",
+  "Science",
+  "Space",
+  "Nature",
+  "Travel and Vlogs",
+  "Food and Cooking",
+  "Fitness",
+  "Sports",
+  "Podcasts",
+  "Education",
+  "News",
+  "Documentaries",
+  "Short Videos",
+]
 
 export interface SubtitleTrack {
   id: string
@@ -25,13 +59,27 @@ export interface VideoItem {
   title: string
   description: string
   videoUrl: string
+  normalizedSourceUrl?: string
+  sourceType?: "native" | "youtube"
+  externalVideoId?: string
+  channelTitle?: string
+  channelId?: string
+  embeddable?: boolean
+  isShortForm?: boolean
   thumbnailUrl: string
   duration: number // in seconds
   category: VideoCategory
+  categories?: VideoCategory[]
   views: number
   featured?: boolean
   quality: string[]
   tags: string[]
+  sourceProvider?: string
+  sourceAttribution?: string
+  license?: string
+  status?: "published" | "draft" | "archived" | "duplicate_archived" | "broken"
+  validationStatus?: "verified" | "pending" | "failed"
+  createdAt?: string
   subtitles?: SubtitleTrack[]
   previewThumbnails?: ThumbnailPreview[]
 }
@@ -72,7 +120,13 @@ export interface NavItem {
   href: string
 }
 
-// User & Authentication Types for Phase 3 & 4
+export interface NotificationPreferences {
+  recommendations: boolean
+  newReleases: boolean
+  systemUpdates: boolean
+}
+
+// User & Authentication Types for Phase 3, 4 & 10
 export interface UserPreferences {
   preferredSpeed: number
   preferredSubtitle: string | null
@@ -82,6 +136,7 @@ export interface UserPreferences {
   historyTrackingEnabled?: boolean
   resumePreference?: "ask" | "auto" | "start_over"
   completionThreshold?: number
+  notificationPreferences?: NotificationPreferences
 }
 
 export interface WatchProgressDTO {

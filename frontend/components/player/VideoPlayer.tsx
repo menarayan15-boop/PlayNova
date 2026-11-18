@@ -23,6 +23,7 @@ interface VideoPlayerProps {
   thumbnails?: ThumbnailPreview[]
   className?: string
   nextVideo?: VideoItem | null
+  enableGlobalShortcuts?: boolean
   onTimeUpdate?: (currentTime: number, duration: number) => void
   onEnded?: () => void
   onNextVideo?: () => void
@@ -31,6 +32,7 @@ interface VideoPlayerProps {
 const DEFAULT_SUBTITLES: SubtitleTrack[] = [
   { id: "sub-en", label: "English", language: "en", src: "/captions/english.vtt", default: true },
   { id: "sub-es", label: "Español", language: "es", src: "/captions/spanish.vtt" },
+  { id: "sub-fr", label: "Français", language: "fr", src: "/captions/french.vtt" },
 ]
 
 export default function VideoPlayer({
@@ -43,73 +45,76 @@ export default function VideoPlayer({
   thumbnails,
   className = "",
   nextVideo,
+  enableGlobalShortcuts = false,
   onTimeUpdate,
   onEnded,
   onNextVideo,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const userPausedRef = useRef(false)
+
+  // Local per-instance playback state synchronized strictly with actual HTMLVideoElement events
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isEnded, setIsEnded] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [bufferedTime, setBufferedTime] = useState(0)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isBuffering, setIsBuffering] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isPiP, setIsPiP] = useState(false)
+  const [isPiPSupported, setIsPiPSupported] = useState(false)
+  const [actualResolution, setActualResolution] = useState("1080p HD")
+  const [error, setError] = useState<string | null>(null)
+  const [activeCueLines, setActiveCueLines] = useState<string[]>([])
+
   const [isScrubbing, setIsScrubbing] = useState(false)
-  const [hasInteracted, setHasInteracted] = useState(false)
   const [isFocusWithin, setIsFocusWithin] = useState(false)
   const [isAutoplayCancelled, setIsAutoplayCancelled] = useState(false)
 
-  // Reset cancellation on new video source
-  useEffect(() => {
-    setIsAutoplayCancelled(false)
-  }, [src])
-
+  // Shared user-preference settings from store
   const {
-    isPlaying,
-    isEnded,
     isMuted,
     volume,
-    currentTime,
-    duration,
-    bufferedTime,
-    isBuffering,
-    isLoading,
-    isFullscreen,
-    isTheaterMode,
-    isPiP,
-    isPiPSupported,
     playbackSpeed,
     activeSubtitleTrack,
     showRemainingTime,
+    isTheaterMode,
     isSettingsOpen,
     isShortcutsOpen,
-    error,
-    actualResolution,
-    setIsPlaying,
-    setIsEnded,
     setIsMuted,
     setVolume,
-    setCurrentTime,
-    setDuration,
-    setBufferedTime,
-    setIsBuffering,
-    setIsLoading,
-    setIsFullscreen,
-    toggleTheaterMode,
-    setIsPiP,
-    setIsPiPSupported,
     setPlaybackSpeed,
     cyclePlaybackSpeed,
     setActiveSubtitleTrack,
     setAvailableSubtitles,
     toggleSubtitles,
     toggleRemainingTime,
+    toggleTheaterMode,
     toggleSettingsOpen,
     toggleShortcutsOpen,
     setIsShortcutsOpen,
-    setActualResolution,
-    setError,
   } = usePlayerStore()
+
+  // Reset instance state cleanly when src changes (never auto-restarting a manually paused video)
+  useEffect(() => {
+    setIsAutoplayCancelled(false)
+    setIsPlaying(false)
+    setIsEnded(false)
+    setCurrentTime(0)
+    setDuration(0)
+    setBufferedTime(0)
+    setError(null)
+    setActiveCueLines([])
+    userPausedRef.current = false
+  }, [src])
 
   // 1. Playback Coordinator: Pauses other PlayNova players when this video plays
   const { notifyPlaying } = usePlaybackCoordinator(id, () => {
-    if (videoRef.current && !videoRef.current.paused) {
-      videoRef.current.pause()
+    const video = videoRef.current
+    if (video && !video.paused) {
+      video.pause()
     }
   })
 
@@ -123,46 +128,79 @@ export default function VideoPlayer({
     hideDelayMs: 3000,
   })
 
-  // 3. Play / Pause logic
+  // 3. Play / Pause logic — ALWAYS reads real HTMLVideoElement.paused (never stale React state!)
   const handleTogglePlay = useCallback(() => {
-    setHasInteracted(true)
-    if (!videoRef.current) return
+    const video = videoRef.current
+    if (!video) return
 
-    if (isEnded) {
-      videoRef.current.currentTime = 0
-      videoRef.current.play().catch(() => {})
+    if (video.ended) {
+      userPausedRef.current = false
+      video.currentTime = 0
       setIsEnded(false)
-      setIsPlaying(true)
-    } else if (isPlaying) {
-      videoRef.current.pause()
-    } else {
-      videoRef.current
+      video
         .play()
         .then(() => {
           setError(null)
           notifyPlaying()
         })
         .catch((err) => {
-          console.warn("Play request was blocked or interrupted:", err)
+          console.warn("Replay request blocked or interrupted:", err)
+        })
+      return
+    }
+
+    if (!video.paused) {
+      // Explicit user pause takes strict priority
+      userPausedRef.current = true
+      video.pause()
+      setIsPlaying(false)
+      showControlsTemporarily()
+    } else {
+      userPausedRef.current = false
+      video
+        .play()
+        .then(() => {
+          setError(null)
+          notifyPlaying()
+        })
+        .catch((err) => {
+          setIsPlaying(false)
+          console.warn("Play request blocked or interrupted:", err)
         })
     }
-  }, [isEnded, isPlaying, setIsEnded, setIsPlaying, setError, notifyPlaying])
+  }, [notifyPlaying, showControlsTemporarily])
+
+  // Dedicated Stop action: pauses playback and resets to 0:00
+  const handleStop = useCallback(() => {
+    const video = videoRef.current
+    if (!video) return
+    userPausedRef.current = true
+    video.pause()
+    video.currentTime = 0
+    setCurrentTime(0)
+    setIsPlaying(false)
+    setIsEnded(false)
+    setActiveCueLines([])
+    showControlsTemporarily()
+  }, [showControlsTemporarily])
 
   // 4. Seeking logic
   const handleSeek = useCallback(
     (time: number) => {
-      if (!videoRef.current) return
-      const clamped = Math.max(0, Math.min(time, duration || 0))
-      videoRef.current.currentTime = clamped
+      const video = videoRef.current
+      if (!video) return
+      const maxDur = video.duration || duration || 0
+      const clamped = Math.max(0, Math.min(time, maxDur))
+      video.currentTime = clamped
       setCurrentTime(clamped)
-      if (isEnded && clamped < (duration || 0)) {
+      if (clamped < maxDur) {
         setIsEnded(false)
       }
     },
-    [duration, isEnded, setCurrentTime, setIsEnded]
+    [duration]
   )
 
-  // Smart watch history & resume playback tracking (Phase 4)
+  // Smart watch history & resume playback tracking
   const {
     showResumePrompt,
     resumeData,
@@ -180,34 +218,39 @@ export default function VideoPlayer({
 
   const handleSeekRelative = useCallback(
     (seconds: number) => {
-      if (!videoRef.current) return
-      const newTime = Math.max(0, Math.min((videoRef.current.currentTime || 0) + seconds, duration || 0))
-      videoRef.current.currentTime = newTime
+      const video = videoRef.current
+      if (!video) return
+      const maxDur = video.duration || duration || 0
+      const newTime = Math.max(0, Math.min((video.currentTime || 0) + seconds, maxDur))
+      video.currentTime = newTime
       setCurrentTime(newTime)
-      if (isEnded && newTime < (duration || 0)) {
+      if (newTime < maxDur) {
         setIsEnded(false)
       }
       showControlsTemporarily()
     },
-    [duration, isEnded, setCurrentTime, setIsEnded, showControlsTemporarily]
+    [duration, showControlsTemporarily]
   )
 
-  // 5. Volume adjustment
+  // 5. Volume adjustment (never triggers playback!)
   const handleVolumeChange = useCallback(
     (newVol: number) => {
-      if (!videoRef.current) return
-      setVolume(newVol)
-      videoRef.current.volume = newVol
-      videoRef.current.muted = newVol === 0
+      const clamped = Math.max(0, Math.min(1, newVol))
+      setVolume(clamped)
+      if (videoRef.current) {
+        videoRef.current.volume = clamped
+        videoRef.current.muted = clamped === 0
+      }
     },
     [setVolume]
   )
 
   const handleToggleMute = useCallback(() => {
-    if (!videoRef.current) return
     const nextMuted = !isMuted
     setIsMuted(nextMuted)
-    videoRef.current.muted = nextMuted
+    if (videoRef.current) {
+      videoRef.current.muted = nextMuted
+    }
   }, [isMuted, setIsMuted])
 
   // 6. Playback speed
@@ -224,27 +267,22 @@ export default function VideoPlayer({
   // 7. Fullscreen toggle
   const handleToggleFullscreen = useCallback(async () => {
     if (!containerRef.current) return
-
     try {
       if (!document.fullscreenElement) {
         if (containerRef.current.requestFullscreen) {
           await containerRef.current.requestFullscreen()
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } else if ((containerRef.current as any).webkitRequestFullscreen) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (containerRef.current as any).webkitRequestFullscreen()
         }
       } else {
         if (document.exitFullscreen) {
           await document.exitFullscreen()
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } else if ((document as any).webkitExitFullscreen) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (document as any).webkitExitFullscreen()
         }
       }
     } catch (err) {
-      console.warn("Fullscreen change was rejected:", err)
+      console.warn("Fullscreen change rejected:", err)
     }
   }, [])
 
@@ -252,7 +290,6 @@ export default function VideoPlayer({
   const handleTogglePiP = useCallback(async () => {
     const video = videoRef.current
     if (!video) return
-
     try {
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture()
@@ -264,21 +301,12 @@ export default function VideoPlayer({
     }
   }, [])
 
-  // 9. Subtitles track sync
+  // 9. Subtitle selection — uses 'hidden' native mode so browser parses WebVTT cues
+  // without painting overlapping bottom captions; PlayNova renders positioned accessible captions!
   const handleSelectSubtitle = useCallback(
     (lang: string | null) => {
       setActiveSubtitleTrack(lang)
-      const video = videoRef.current
-      if (!video || !video.textTracks) return
-
-      for (let i = 0; i < video.textTracks.length; i++) {
-        const track = video.textTracks[i]
-        if (lang && track.language === lang) {
-          track.mode = "showing"
-        } else {
-          track.mode = "disabled"
-        }
-      }
+      if (!lang) setActiveCueLines([])
     },
     [setActiveSubtitleTrack]
   )
@@ -288,9 +316,9 @@ export default function VideoPlayer({
     if (typeof document !== "undefined") {
       setIsPiPSupported(Boolean(document.pictureInPictureEnabled))
     }
-  }, [setIsPiPSupported])
+  }, [])
 
-  // 11. Initial & dynamic subtitles setup with stability guards
+  // 11. Available subtitles list sync
   const prevSubtitlesRef = useRef<SubtitleTrack[] | null>(null)
   useEffect(() => {
     const currentSubs = subtitles || []
@@ -302,87 +330,77 @@ export default function VideoPlayer({
         (t, i) =>
           t.id === currentSubs[i]?.id &&
           t.language === currentSubs[i]?.language &&
-          t.src === currentSubs[i]?.src &&
-          t.default === currentSubs[i]?.default
+          t.src === currentSubs[i]?.src
       )
 
     if (!isUnchanged) {
       prevSubtitlesRef.current = currentSubs
       setAvailableSubtitles(currentSubs)
-
-      // Automatically configure default subtitle if not already selected
-      if (!activeSubtitleTrack && currentSubs.length > 0) {
-        const defaultTrack = currentSubs.find((t) => t.default)
-        if (defaultTrack) {
-          setActiveSubtitleTrack(defaultTrack.language)
-        }
-      } else if (activeSubtitleTrack && !currentSubs.some((t) => t.language === activeSubtitleTrack)) {
-        // If current selection is no longer in track list, fallback to null
-        setActiveSubtitleTrack(null)
-      }
     }
-  }, [subtitles, activeSubtitleTrack, setAvailableSubtitles, setActiveSubtitleTrack])
+  }, [subtitles, setAvailableSubtitles])
 
-  // Synchronize native HTML5 textTracks state whenever activeSubtitleTrack changes
+  // Sync HTML5 textTracks to 'hidden' (for active language) or 'disabled' and read activeCues cleanly
   useEffect(() => {
     const video = videoRef.current
     if (!video || !video.textTracks) return
+
+    let activeTrack: TextTrack | null = null
 
     for (let i = 0; i < video.textTracks.length; i++) {
       const track = video.textTracks[i]
       if (activeSubtitleTrack && track.language === activeSubtitleTrack) {
-        track.mode = "showing"
+        // 'hidden' loads & fires cuechange without browser painting over our bottom controls!
+        track.mode = "hidden"
+        activeTrack = track
       } else {
         track.mode = "disabled"
       }
     }
-  }, [activeSubtitleTrack])
 
-  // Register text-track change listener to sync browser-native track changes
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video || !video.textTracks) return
+    if (!activeTrack) {
+      setActiveCueLines([])
+      return
+    }
 
-    const trackList = video.textTracks
-    const handleNativeTrackChange = () => {
-      let showingLang: string | null = null
-      for (let i = 0; i < trackList.length; i++) {
-        if (trackList[i].mode === "showing") {
-          showingLang = trackList[i].language
-          break
+    const updateCues = () => {
+      if (!activeTrack || !activeTrack.activeCues) {
+        setActiveCueLines([])
+        return
+      }
+      const lines: string[] = []
+      for (let i = 0; i < activeTrack.activeCues.length; i++) {
+        const cue = activeTrack.activeCues[i] as VTTCue
+        if (cue?.text) {
+          lines.push(cue.text.replace(/<[^>]+>/g, "").trim())
         }
       }
-      if (showingLang !== activeSubtitleTrack) {
-        setActiveSubtitleTrack(showingLang)
-      }
+      setActiveCueLines(lines.filter(Boolean))
     }
 
-    trackList.addEventListener("change", handleNativeTrackChange)
+    updateCues()
+    activeTrack.addEventListener("cuechange", updateCues)
     return () => {
-      trackList.removeEventListener("change", handleNativeTrackChange)
+      activeTrack?.removeEventListener("cuechange", updateCues)
     }
-  }, [activeSubtitleTrack, setActiveSubtitleTrack])
+  }, [activeSubtitleTrack, src, subtitles])
 
   // 12. Fullscreen change listener
   useEffect(() => {
     const onFullscreenChange = () => {
       const isFull = Boolean(
-        document.fullscreenElement ||
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (document as any).webkitFullscreenElement
+        document.fullscreenElement || (document as any).webkitFullscreenElement
       )
       setIsFullscreen(isFull)
     }
-
     document.addEventListener("fullscreenchange", onFullscreenChange)
     document.addEventListener("webkitfullscreenchange", onFullscreenChange)
     return () => {
       document.removeEventListener("fullscreenchange", onFullscreenChange)
       document.removeEventListener("webkitfullscreenchange", onFullscreenChange)
     }
-  }, [setIsFullscreen])
+  }, [])
 
-  // 13. Synchronize volume and speed to video element on state changes
+  // 13. Synchronize volume, mute, and speed to video element (never starts playback!)
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.volume = volume
@@ -391,9 +409,9 @@ export default function VideoPlayer({
     }
   }, [volume, isMuted, playbackSpeed])
 
-  // 14. Keyboard shortcuts hook
+  // 14. Keyboard shortcuts (active when player is focused, playing, or on dedicated watch page)
   useKeyboardShortcuts({
-    isActive: true,
+    isActive: isFocusWithin || isPlaying || enableGlobalShortcuts,
     onTogglePlay: handleTogglePlay,
     onSeekRelative: handleSeekRelative,
     onVolumeChangeRelative: (delta) => handleVolumeChange(volume + delta),
@@ -407,36 +425,30 @@ export default function VideoPlayer({
     onToggleHelpModal: toggleShortcutsOpen,
   })
 
-  // 15. Native HTML5 Video Events
+  // 15. Native HTML5 Media Events (single source of truth for playback state)
   const handleLoadStart = () => {
     setIsLoading(true)
     setError(null)
   }
 
   const handleLoadedMetadata = () => {
-    if (!videoRef.current) return
-    const dur = videoRef.current.duration
-    setDuration(dur)
+    const video = videoRef.current
+    if (!video) return
+    setDuration(video.duration || 0)
     setIsLoading(false)
 
-    // Detect actual resolution
-    const width = videoRef.current.videoWidth
-    const height = videoRef.current.videoHeight
-    if (height >= 2160 || width >= 3840) {
-      setActualResolution("4K UHD")
-    } else if (height >= 1080 || width >= 1920) {
-      setActualResolution("1080p HD")
-    } else if (height >= 720 || width >= 1280) {
-      setActualResolution("720p HD")
-    } else if (height > 0) {
-      setActualResolution(`${height}p`)
-    }
+    const width = video.videoWidth
+    const height = video.videoHeight
+    if (height >= 2160 || width >= 3840) setActualResolution("4K UHD")
+    else if (height >= 1080 || width >= 1920) setActualResolution("1080p HD")
+    else if (height >= 720 || width >= 1280) setActualResolution("720p HD")
+    else if (height > 0) setActualResolution(`${height}p`)
 
-    // Apply active subtitle track
-    if (activeSubtitleTrack && videoRef.current.textTracks) {
-      for (let i = 0; i < videoRef.current.textTracks.length; i++) {
-        const track = videoRef.current.textTracks[i]
-        track.mode = track.language === activeSubtitleTrack ? "showing" : "disabled"
+    // Ensure native browser tracks never paint over custom controls
+    if (video.textTracks) {
+      for (let i = 0; i < video.textTracks.length; i++) {
+        const track = video.textTracks[i]
+        track.mode = activeSubtitleTrack && track.language === activeSubtitleTrack ? "hidden" : "disabled"
       }
     }
   }
@@ -450,7 +462,25 @@ export default function VideoPlayer({
     setIsBuffering(true)
   }
 
+  const handlePlay = () => {
+    // If user manually paused and an unexpected auto-resume fired, enforce manual pause
+    if (userPausedRef.current && videoRef.current && !videoRef.current.paused) {
+      videoRef.current.pause()
+      setIsPlaying(false)
+      return
+    }
+    setIsPlaying(true)
+    setIsEnded(false)
+    notifyPlaying()
+    showControlsTemporarily()
+  }
+
   const handlePlaying = () => {
+    if (userPausedRef.current && videoRef.current && !videoRef.current.paused) {
+      videoRef.current.pause()
+      setIsPlaying(false)
+      return
+    }
     setIsPlaying(true)
     setIsBuffering(false)
     setIsLoading(false)
@@ -461,6 +491,7 @@ export default function VideoPlayer({
 
   const handlePause = () => {
     setIsPlaying(false)
+    setIsBuffering(false)
   }
 
   const handleEnded = () => {
@@ -470,18 +501,20 @@ export default function VideoPlayer({
   }
 
   const handleProgress = () => {
-    if (!videoRef.current) return
-    const buff = videoRef.current.buffered
+    const video = videoRef.current
+    if (!video) return
+    const buff = video.buffered
     if (buff.length > 0) {
       setBufferedTime(buff.end(buff.length - 1))
     }
   }
 
   const handleTimeUpdate = () => {
-    if (!videoRef.current) return
-    const cur = videoRef.current.currentTime
+    const video = videoRef.current
+    if (!video) return
+    const cur = video.currentTime
     setCurrentTime(cur)
-    onTimeUpdate?.(cur, duration)
+    onTimeUpdate?.(cur, video.duration || duration)
     handleProgress()
   }
 
@@ -493,17 +526,17 @@ export default function VideoPlayer({
     let message = "Unable to load video stream. Please verify your connection or try another source."
     if (mediaError) {
       switch (mediaError.code) {
-        case 1: // MEDIA_ERR_ABORTED
+        case 1:
           message = "Video playback was aborted by the client."
           break
-        case 2: // MEDIA_ERR_NETWORK
+        case 2:
           message = "A network error prevented video data from loading."
           break
-        case 3: // MEDIA_ERR_DECODE
+        case 3:
           message = "Video playback encountered a decoding or corruption error."
           break
-        case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
-          message = "Video resource is unavailable, restricted (HTTP 403/404), or in an unsupported format."
+        case 4:
+          message = "Video resource is unavailable, restricted, or in an unsupported format."
           break
         default:
           message = `Stream error (${mediaError.message || "Code " + mediaError.code}).`
@@ -512,31 +545,31 @@ export default function VideoPlayer({
     setError(message)
   }
 
-  // Picture in picture event listeners
+  // Picture-in-Picture event listeners
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-
     const onEnterPiP = () => setIsPiP(true)
     const onLeavePiP = () => setIsPiP(false)
-
     video.addEventListener("enterpictureinpicture", onEnterPiP)
     video.addEventListener("leavepictureinpicture", onLeavePiP)
     return () => {
       video.removeEventListener("enterpictureinpicture", onEnterPiP)
       video.removeEventListener("leavepictureinpicture", onLeavePiP)
     }
-  }, [setIsPiP])
+  }, [])
 
   const handleRetry = () => {
-    if (!videoRef.current) return
+    const video = videoRef.current
+    if (!video) return
+    userPausedRef.current = false
     setError(null)
     setIsLoading(true)
-    videoRef.current.load()
-    videoRef.current.play().catch(() => {})
+    video.load()
+    video.play().catch(() => {})
   }
 
-  // Determine container styling based on viewing mode
+  const areControlsShowing = controlsVisible || !isPlaying
   const theaterModeStyles = isTheaterMode
     ? "w-full aspect-[21/9] sm:h-[72vh] max-h-[820px] shadow-[0_0_80px_rgba(0,0,0,0.85)] z-20"
     : "w-full aspect-video shadow-2xl"
@@ -556,28 +589,33 @@ export default function VideoPlayer({
             setIsFocusWithin(false)
           }
         }}
-        className={`relative bg-[#0a181b] rounded-2xl overflow-hidden border border-white/10 select-none group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8c7b33] transition-all duration-500 ${theaterModeStyles} ${className}`}
+        className={`relative bg-[#0a181b] rounded-2xl overflow-hidden border border-white/10 select-none group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8c7b33] transition-all duration-300 ${theaterModeStyles} ${className}`}
       >
-        {/* HTML5 Video Element with native WebVTT text tracks */}
+        {/* HTML5 Video Element (native WebVTT tracks parsed in hidden mode; PlayNova renders positioned captions) */}
         <video
           ref={videoRef}
           src={src}
           poster={poster}
           playsInline
-          autoPlay={autoPlay}
+          preload="metadata"
+          autoPlay={autoPlay && !userPausedRef.current}
           crossOrigin="anonymous"
           onLoadStart={handleLoadStart}
           onLoadedMetadata={handleLoadedMetadata}
           onCanPlay={handleCanPlay}
           onWaiting={handleWaiting}
+          onPlay={handlePlay}
           onPlaying={handlePlaying}
           onPause={handlePause}
           onEnded={handleEnded}
           onProgress={handleProgress}
           onTimeUpdate={handleTimeUpdate}
           onError={handleError}
-          onClick={handleTogglePlay}
-          className="w-full h-full object-cover cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleTogglePlay()
+          }}
+          className="w-full h-full object-contain bg-black cursor-pointer"
         >
           {subtitles.map((track) => (
             <track
@@ -586,7 +624,6 @@ export default function VideoPlayer({
               label={track.label}
               srcLang={track.language}
               src={track.src}
-              default={track.language === activeSubtitleTrack}
             />
           ))}
         </video>
@@ -594,7 +631,7 @@ export default function VideoPlayer({
         {/* Ambient Top Title Overlay */}
         <div
           className={`absolute top-0 inset-x-0 p-4 sm:p-5 bg-gradient-to-b from-black/80 via-black/30 to-transparent transition-opacity duration-300 pointer-events-none z-10 flex items-center justify-between ${
-            controlsVisible || !isPlaying ? "opacity-100" : "opacity-0"
+            areControlsShowing ? "opacity-100" : "opacity-0"
           }`}
         >
           <div className="flex items-center gap-2 max-w-[80%]">
@@ -608,14 +645,40 @@ export default function VideoPlayer({
           </span>
         </div>
 
-        {/* Loading & Buffering Indicator */}
+        {/* Accessible Non-Overlapping Custom Caption Overlay */}
+        {activeSubtitleTrack && activeCueLines.length > 0 && !error && (
+          <div
+            data-testid="playnova-captions"
+            role="region"
+            aria-live="polite"
+            aria-atomic="true"
+            className={`pointer-events-none absolute inset-x-0 px-4 sm:px-8 flex flex-col items-center gap-1 z-10 transition-all duration-300 ${
+              areControlsShowing ? "bottom-24 sm:bottom-[104px]" : "bottom-5 sm:bottom-8"
+            }`}
+          >
+            {activeCueLines.map((line, i) => (
+              <span
+                key={i}
+                className="inline-block max-w-[92%] sm:max-w-[80%] text-center px-3.5 py-1.5 rounded-lg bg-black/80 text-white text-xs sm:text-sm md:text-base font-medium leading-snug tracking-normal shadow-lg backdrop-blur-sm"
+              >
+                {line}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Loading & Buffering Indicator (pointer-events-none so it never blocks Pause/Stop!) */}
         <LoadingIndicator isLoading={isLoading} isBuffering={isBuffering} />
 
         {/* Big Center Play / Replay Action Button */}
         {!isPlaying && !isLoading && !isBuffering && !error && (
           <button
             type="button"
-            onClick={handleTogglePlay}
+            data-play-toggle="true"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleTogglePlay()
+            }}
             aria-label={isEnded ? "Replay video" : "Play video"}
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#0f3238]/85 hover:bg-[#0f3238] border border-white/20 text-[#f5f4ee] flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all z-20 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#8c7b33]"
           >
@@ -634,7 +697,7 @@ export default function VideoPlayer({
 
         {/* Playback Error Overlay */}
         {error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-[#0a181b]/95 z-30 text-center select-none animate-in fade-in">
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-[#0a181b]/95 z-30 text-center select-none">
             <div className="w-12 h-12 rounded-full bg-red-900/30 border border-red-500/30 flex items-center justify-center text-red-400 mb-3">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />
@@ -654,7 +717,7 @@ export default function VideoPlayer({
           </div>
         )}
 
-        {/* Smart Resume Playback Prompt (Phase 4) */}
+        {/* Smart Resume Playback Prompt */}
         {showResumePrompt && resumeData && (
           <ResumePrompt
             lastPositionSeconds={resumeData.lastPositionSeconds}
@@ -665,23 +728,19 @@ export default function VideoPlayer({
           />
         )}
 
-        {/* Autoplay Next Video Countdown (Phase 5 Feature 8) */}
+        {/* Autoplay Next Video Countdown */}
         {isEnded && nextVideo && onNextVideo && !isAutoplayCancelled && (
           <AutoplayCountdown
             nextVideo={nextVideo}
-            onPlayNow={() => {
-              onNextVideo()
-            }}
-            onCancel={() => {
-              setIsAutoplayCancelled(true)
-            }}
+            onPlayNow={() => onNextVideo()}
+            onCancel={() => setIsAutoplayCancelled(true)}
           />
         )}
 
-        {/* Upgraded Custom Player Controls Bar */}
+        {/* Custom Player Controls Bar */}
         <div
           className={`transition-opacity duration-300 ${
-            controlsVisible || !isPlaying ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+            areControlsShowing ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
           }`}
         >
           <PlayerControls
@@ -704,6 +763,7 @@ export default function VideoPlayer({
             isSettingsOpen={isSettingsOpen}
             thumbnails={thumbnails}
             onTogglePlay={handleTogglePlay}
+            onStop={handleStop}
             onSeek={handleSeek}
             onSeekRelative={handleSeekRelative}
             onVolumeChange={handleVolumeChange}

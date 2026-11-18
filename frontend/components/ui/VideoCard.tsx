@@ -26,7 +26,7 @@ function formatViews(views: number): string {
   return String(views)
 }
 
-export default function VideoCard({
+function VideoCardInner({
   video,
   onSelect,
   progressPercentage,
@@ -34,14 +34,17 @@ export default function VideoCard({
   isCompleted = false,
   showWatchlistButton = true,
 }: VideoCardProps) {
-  const { isInWatchlist, toggleWatchlist, hasLoaded, fetchWatchlist } = useWatchlistStore()
-  const isSaved = isInWatchlist(video.id)
+  const isSaved = useWatchlistStore((s) => s.savedVideoIds.includes(video.id))
+  const hasLoaded = useWatchlistStore((s) => s.hasLoaded)
+  const isLoading = useWatchlistStore((s) => s.isLoading)
+  const toggleWatchlist = useWatchlistStore((s) => s.toggleWatchlist)
+  const fetchWatchlist = useWatchlistStore((s) => s.fetchWatchlist)
 
   useEffect(() => {
-    if (!hasLoaded) {
+    if (!hasLoaded && !isLoading) {
       fetchWatchlist()
     }
-  }, [hasLoaded, fetchWatchlist])
+  }, [hasLoaded, isLoading, fetchWatchlist])
 
   const handleClick = (e: React.MouseEvent) => {
     if (onSelect) {
@@ -66,10 +69,11 @@ export default function VideoCard({
           alt={video.title}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           loading="lazy"
+          decoding="async"
         />
 
         {/* Category Pill */}
-        <div className="absolute top-2.5 left-2.5 z-10">
+        <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5">
           <span className="px-2 py-0.5 rounded-full text-[10px] font-mono tracking-wider uppercase bg-[#0c2f35]/90 text-[#8c7b33] border border-[#8c7b33]/40 backdrop-blur-sm">
             {video.category}
           </span>
@@ -147,6 +151,11 @@ export default function VideoCard({
           <h3 className="font-medium text-[15px] leading-snug line-clamp-2 text-[#eef2ec] group-hover:text-[#cdc8f6] transition-colors">
             {video.title}
           </h3>
+          {video.channelTitle && (
+            <p className="mt-0.5 text-[11px] font-mono text-[#cdc8f6]/90 truncate">
+              {video.channelTitle}
+            </p>
+          )}
           <p className="mt-1 text-xs text-[#93aaa6] line-clamp-2 leading-relaxed">
             {video.description}
           </p>
@@ -169,3 +178,6 @@ export default function VideoCard({
     </div>
   )
 }
+
+const VideoCard = React.memo(VideoCardInner)
+export default VideoCard
